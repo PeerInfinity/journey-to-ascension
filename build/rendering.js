@@ -2185,9 +2185,16 @@ export class Rendering {
         updateRendering();
         // Unhide the game now that it's ready
         document.getElementById("game-area").classList.remove("hidden");
-        if (GAMESTATE.save_version != SAVE_VERSION || SAVE_VERSION != CHANGELOG[0]?.version) {
-            showChangelog(GAMESTATE.save_version);
-        }
+        // Auto-show of the changelog on save-version mismatch removed
+        // on the `substrate` branch: the bridge can't inject its
+        // managed-mode flag in time (jta's DOMContentLoaded — which
+        // runs this code — fires before the iframe `load` event that
+        // triggers bridge injection), so a managed-mode gate would not
+        // suppress the popup. Removing unconditionally is the minimal
+        // fix; the manual "Changelog" button in Settings still works.
+        // if (GAMESTATE.save_version != SAVE_VERSION || SAVE_VERSION != CHANGELOG[0]?.version) {
+        //     showChangelog(GAMESTATE.save_version);
+        // }
     }
 }
 function checkForZoneAndReset() {
