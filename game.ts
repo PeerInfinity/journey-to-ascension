@@ -1,5 +1,5 @@
 import { handleHotkeyPressed, handleHotkeyReleased, Rendering, updateRendering } from "./rendering.js";
-import { Gamestate, saveGame, updateGamestate, resetTasks, calcTickRate } from "./simulation.js";
+import { Gamestate, saveGame, updateGamestate, resetTasks, calcTickRate, isManagedMode } from "./simulation.js";
 
 function gameLoop() {
     updateGamestate();
@@ -23,7 +23,12 @@ document.addEventListener("DOMContentLoaded", () => {
     RENDERING.initialize();
     RENDERING.start();
 
-    setTickRate();
+    // In managed mode the host owns the tick clock — it calls
+    // resumeGameLoop() when the player enters a jta region and
+    // pauseGameLoop() when they leave. Rendering is unaffected.
+    if (!isManagedMode()) {
+        setTickRate();
+    }
 });
 
 document.addEventListener("keyup", handleHotkeyReleased);

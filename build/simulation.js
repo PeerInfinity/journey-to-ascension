@@ -9,6 +9,27 @@ import { AWAKENING_DIVINE_SPARK_MULT, DEFIED_THE_GODS_SPARK_MULT, ENERGETIC_MEMO
 // MARK: Constants
 let task_progress_mult = 1;
 let instant_mode = false;
+// MARK: Substrate / host integration state
+//
+// Managed mode: when on, the host (Archipelago substrate wrapper) owns
+// persistence, ticking, and zone transitions. Internally this gates
+// saveGame (no-op), loadGame (skipped in Gamestate.start), automatic
+// advanceZone after the Travel task (skipped — host advances via the
+// travel callback), and the auto setTickRate in game.ts's
+// DOMContentLoaded handler.
+let _managed_mode = false;
+// Fires when a TaskType.Travel task is fully completed.
+let _travel_task_callback = null;
+// Fires when doEnergyReset() finishes.
+let _energy_reset_callback = null;
+// Synthetic-task injection: per-task callbacks fired when the synthetic
+// task is fully completed. Keyed by task id (use ids well above the
+// normal task-id range to avoid collisions — exit-choice tasks use
+// ids in the 10000+ range by convention).
+const _synthetic_task_callbacks = new Map();
+export function isManagedMode() {
+    return _managed_mode;
+}
 const ZONE_SPEEDUP_BASE = 1.05;
 export const BOSS_MAX_ENERGY_DISPARITY = 5;
 const STARTING_ENERGY = 100;
@@ -354,7 +375,27 @@ function onFullyFinishTask(task) {
         unlockTask(task.task_definition.unlocks_task);
     }
     if (task.task_definition.type == TaskType.Travel) {
-        advanceZone();
+        if (_travel_task_callback) {
+            _travel_task_callback(GAMESTATE.current_zone, {
+                id: task.task_definition.id,
+                name: task.task_definition.name,
+            });
+        }
+        // In managed mode the host owns zone transitions — fire the
+        // travel callback but skip the automatic advanceZone so the
+        // substrate can render synthetic exit-choice tasks and dispatch
+        // user:regionMove on the host side.
+        if (!_managed_mode) {
+            advanceZone();
+        }
+    }
+    // Synthetic-task completion: a host-registered callback fires when
+    // an injected task (e.g. an exit-choice task) is fully done. The
+    // callback is one-shot; we drop it after firing.
+    const syntheticCallback = _synthetic_task_callbacks.get(task.task_definition.id);
+    if (syntheticCallback) {
+        _synthetic_task_callbacks.delete(task.task_definition.id);
+        syntheticCallback();
     }
     if (task.task_definition.type == TaskType.Prestige && !GAMESTATE.prestige_layers_unlocked.includes(task.task_definition.prestige_layer)) {
         GAMESTATE.prestige_layers_unlocked.push(task.task_definition.prestige_layer);
@@ -607,6 +648,17 @@ export function doEnergyReset() {
     storeLoopStartNumbersForNextGameOver();
     skipFreeZones();
     saveGame();
+    // Notify the host that an energy reset happened (jta's own
+    // game-over). The substrate bridge uses this to keep the shared
+    // loop-mode pool in sync — pushing jta's post-reset energy out, and
+    // observing the count so it doesn't double-apply on reactivation.
+    if (_energy_reset_callback) {
+        _energy_reset_callback({
+            currentEnergy: GAMESTATE.current_energy,
+            maxEnergy: GAMESTATE.max_energy,
+            energyResetCount: GAMESTATE.energy_reset_count,
+        });
+    }
 }
 export function calcItemEnergyGain(base_energy) {
     let value = base_energy;
@@ -1159,6 +1211,11 @@ export function calcPerkySpeedMultiplier() {
 // MARK: Persistence
 export const SAVE_LOCATION = "incrementalGameSave";
 export function saveGame() {
+    // In managed mode the host owns persistence — skip writing to
+    // localStorage entirely. Covers all internal call sites (updateActiveTask,
+    // doEnergyReset, resetSave, etc.) without per-site guards.
+    if (_managed_mode)
+        return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const saveData = {};
     GAMESTATE.save_version = SAVE_VERSION;
@@ -1290,7 +1347,9 @@ export class Gamestate {
     hint_has_gotten_prep_run_hint = false;
     hint_has_gotten_boss_hint = false;
     start() {
-        if (!loadGame()) {
+        // In managed mode the host owns persistence — skip reading from
+        // localStorage and go straight to a fresh initialize.
+        if (_managed_mode || !loadGame()) {
             this.initialize();
         }
     }
@@ -1480,5 +1539,84 @@ window.setEnergy = (current, max) => {
         GAMESTATE.max_energy = max;
     }
     return { current: GAMESTATE.current_energy, max: GAMESTATE.max_energy };
+};
+// MARK: Substrate Hooks (host-driven persistence, transitions, events)
+// Managed mode — when on, host owns persistence + ticking + transitions.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.setManagedMode = (enabled) => {
+    _managed_mode = !!enabled;
+    return _managed_mode;
+};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.isManagedMode = () => _managed_mode;
+// Register a callback fired when a TaskType.Travel task fully completes.
+// In managed mode this REPLACES the automatic advanceZone; in non-managed
+// mode it fires in addition to advanceZone. Pass null to clear.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.setTravelTaskCallback = (fn) => {
+    _travel_task_callback = fn;
+};
+// Register a callback fired at the end of doEnergyReset (jta's own
+// game-over). Pass null to clear.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.setEnergyResetCallback = (fn) => {
+    _energy_reset_callback = fn;
+};
+// Load a specific zone by id, optionally in already-completed state.
+// completed:true marks all tasks reps = max_reps WITHOUT re-applying
+// finish effects (perks / items / power / events) — the player already
+// got those on first traversal; this is for the substrate "re-entry"
+// case where the zone shows only exit-choice tasks.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.loadZone = (zoneId, options = {}) => {
+    if (zoneId < 0 || zoneId >= ZONES.length) {
+        return { success: false, error: `Invalid zone ${zoneId} (have ${ZONES.length} zones)` };
+    }
+    GAMESTATE.current_zone = zoneId;
+    resetTasks();
+    if (options.completed) {
+        for (const task of GAMESTATE.tasks) {
+            task.reps = task.task_definition.max_reps;
+            task.progress = 0;
+        }
+        updateEnabledTasks();
+    }
+    return { success: true, zone: GAMESTATE.current_zone, taskCount: GAMESTATE.tasks.length };
+};
+// Inject a synthetic task into the current zone (e.g. an exit-choice
+// task). onComplete fires when the task is fully done (one-shot — the
+// callback is dropped after firing). Synthetic task ids should be well
+// above the upstream task-id range (≥ 10000) to avoid collisions.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.injectSyntheticTask = (spec, onComplete) => {
+    if (typeof spec?.id !== 'number' || typeof spec?.name !== 'string') {
+        return { success: false, error: 'spec.id (number) and spec.name (string) are required' };
+    }
+    if (_synthetic_task_callbacks.has(spec.id)) {
+        return { success: false, error: `Synthetic task ${spec.id} already injected` };
+    }
+    const def = new TaskDefinition({
+        id: spec.id,
+        name: spec.name,
+        type: TaskType.Normal,
+        cost_multiplier: spec.costMultiplier ?? 0,
+        skills: [],
+        max_reps: spec.maxReps ?? 1,
+        zone_id: GAMESTATE.current_zone,
+    });
+    const t = new Task(def);
+    t.enabled = true;
+    GAMESTATE.tasks.push(t);
+    _synthetic_task_callbacks.set(spec.id, onComplete);
+    return { success: true, id: spec.id };
+};
+// Remove all injected synthetic tasks. Use when leaving a region (the
+// host clears synthetic exit tasks before loading the next zone).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.clearSyntheticTasks = () => {
+    const removed = _synthetic_task_callbacks.size;
+    GAMESTATE.tasks = GAMESTATE.tasks.filter(t => !_synthetic_task_callbacks.has(t.task_definition.id));
+    _synthetic_task_callbacks.clear();
+    return { removed };
 };
 //# sourceMappingURL=simulation.js.map

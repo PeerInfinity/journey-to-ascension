@@ -4,6 +4,7 @@ import { PerkType } from "./perks.js";
 import { RenderEvent } from "./events.js";
 import { SkillType } from "./skills.js";
 import { PrestigeRepeatableType, PrestigeUnlockType, PrestigeLayer } from "./prestige_upgrades.js";
+export declare function isManagedMode(): boolean;
 export declare const BOSS_MAX_ENERGY_DISPARITY = 5;
 export declare const SAVE_VERSION = "1.1.1";
 export declare class Skill {
