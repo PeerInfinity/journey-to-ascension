@@ -1,0 +1,14 @@
+export declare const ENERGY_TEXT = "\uD83D\uDD0BEnergy";
+export declare const XP_TEXT = "\u265F\uFE0FXP";
+export declare const DIVINE_SPARK_TEXT = "\u2728Divine Spark";
+export declare const ATTUNEMENT_EMOJI = "\uD83C\uDF00";
+export declare const ATTUNEMENT_TEXT = "\uD83C\uDF00Attunement";
+export declare const POWER_EMOJI = "\uD83D\uDCAA";
+export declare const POWER_TEXT = "\uD83D\uDCAAPower";
+export declare const HASTE_EMOJI = "\uD83D\uDC07";
+export declare const HASTE_TEXT = "\uD83D\uDC07Haste";
+export declare const TRAVEL_EMOJI = "\uD83D\uDDFA\uFE0F";
+export declare const MINOR_TIME_COMPRESSION_EMOJI = "\u231A";
+export declare const BOTTLED_LIGHTNING_EMOJI = "\u26A1";
+export declare const BOTTLED_LIGHTNING_TEXT = "\u26A1Bottled Lightning";
+//# sourceMappingURL=rendering_constants.d.ts.map

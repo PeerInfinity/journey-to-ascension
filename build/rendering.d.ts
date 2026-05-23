@@ -1,0 +1,60 @@
+import { TaskDefinition } from "./zones.js";
+import { ItemType } from "./items.js";
+import { PerkType } from "./perks.js";
+import { RenderEvent } from "./events.js";
+import { SkillType } from "./skills.js";
+export declare function joinWithCommasAndAnd(strings: string[]): string;
+export declare function getSkillString(type: SkillType): string;
+type tooltipLambda = () => string;
+interface ElementWithTooltip extends HTMLElement {
+    generateTooltipHeader?: tooltipLambda;
+    generateTooltipBody?: tooltipLambda;
+}
+export declare function getItemNameWithIcon(item_type: ItemType, plural?: boolean): string;
+export declare function formatNumber(n: number, allow_decimals?: boolean): string;
+export declare function formatInt(n: number): string;
+export declare function formatPercentage(n: number): string;
+export declare class Rendering {
+    tooltipped_element: ElementWithTooltip | null;
+    potential_tooltipped_element: ElementWithTooltip | null;
+    queued_update_tooltip: boolean;
+    tooltip_element: HTMLElement;
+    energy_reset_element: HTMLElement;
+    open_energy_reset_element: HTMLInputElement;
+    end_of_content_element: HTMLElement;
+    settings_element: HTMLElement;
+    energy_element: HTMLElement;
+    messages_element: HTMLElement;
+    message_contexts: Map<Element, RenderEvent>;
+    power_element: HTMLElement;
+    attunement_element: HTMLElement;
+    open_prestige_element: HTMLElement;
+    prestige_overlay_element: HTMLElement;
+    confirmation_overlay_element: HTMLElement;
+    item_undo_element: HTMLInputElement;
+    artifact_undo_element: HTMLInputElement;
+    task_elements: Map<TaskDefinition, ElementWithTooltip>;
+    skill_elements: Map<SkillType, HTMLElement>;
+    item_elements: Map<ItemType, HTMLButtonElement>;
+    perk_elements: Map<PerkType, HTMLElement>;
+    controls_list_element: HTMLElement;
+    open_stats_element: HTMLElement;
+    stats_overlay_element: HTMLElement;
+    changelog_overlay_element: HTMLElement;
+    credits_overlay_element: HTMLElement;
+    hints_overlay_element: HTMLElement;
+    energy_reset_count: number;
+    current_zone: number;
+    item_order: ItemType[];
+    artifact_order: ItemType[];
+    viewing_last_reset: boolean;
+    createTasks(): void;
+    constructor();
+    initialize(): void;
+    start(): void;
+}
+export declare function updateRendering(): void;
+export declare function handleHotkeyReleased(event: KeyboardEvent): void;
+export declare function handleHotkeyPressed(event: KeyboardEvent): void;
+export {};
+//# sourceMappingURL=rendering.d.ts.map
