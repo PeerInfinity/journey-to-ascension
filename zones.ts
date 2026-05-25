@@ -26,6 +26,12 @@ export class TaskDefinition {
     hidden_by_default = false;
     unlocks_task: number = -1;
     zone_id: number = 0;
+    // Substrate hook: when true, calcEnergyDrainPerTick returns 0 for
+    // this task. Used by injectSyntheticTask to mark exit-choice tasks
+    // as costing no energy. cost_multiplier alone is not enough — even
+    // with cost_multiplier=0, the first (and only) tick of the task
+    // still drains the per-tick zone amount before the rep finishes.
+    free: boolean = false;
 
     constructor(overrides: Partial<TaskDefinition> = {}) {
         Object.assign(this, overrides);

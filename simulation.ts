@@ -222,8 +222,13 @@ export function calcTaskProgressMultiplier(task: Task, override_haste: boolean |
         skill_level_mult *= calcSkillTaskProgressMultiplierFromLevel(getSkill(skill_type).level);
     }
 
-    // Avoid multi-skill tasks scaling much faster than all other tasks
-    mult *= Math.pow(skill_level_mult, 1 / task.task_definition.skills.length);
+    // Avoid multi-skill tasks scaling much faster than all other tasks.
+    // Skip when the task has no skills — 1/0 = Infinity, and
+    // Math.pow(1, Infinity) is NaN, which poisons everything downstream
+    // (tooltip energy/ticks render as NaN).
+    if (task.task_definition.skills.length > 0) {
+        mult *= Math.pow(skill_level_mult, 1 / task.task_definition.skills.length);
+    }
 
     let has_attunement_skill = false;
     for (const skill_type of task.task_definition.skills) {
@@ -749,6 +754,12 @@ export function calcEnergyDrainPerTickInZone(zone: number): number {
 }
 
 export function calcEnergyDrainPerTick(task: Task, is_single_tick: boolean): number {
+    // Substrate-injected free tasks (e.g. exit-choice tasks) drain
+    // nothing, regardless of zone / perks / single-tick status.
+    if (task.task_definition.free) {
+        return 0;
+    }
+
     let drain = calcEnergyDrainPerTickInZone(task.task_definition.zone_id);
 
     if (is_single_tick && hasPrestigeUnlock(PrestigeUnlockType.MasteryOfTime)) {
@@ -1954,7 +1965,7 @@ export function updateGamestate() {
 // callback is dropped after firing). Synthetic task ids should be well
 // above the upstream task-id range (≥ 10000) to avoid collisions.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-(window as any).injectSyntheticTask = (spec: { id: number, name: string, costMultiplier?: number, maxReps?: number }, onComplete: () => void) => {
+(window as any).injectSyntheticTask = (spec: { id: number, name: string, costMultiplier?: number, maxReps?: number, free?: boolean, skills?: SkillType[] }, onComplete: () => void) => {
     if (typeof spec?.id !== 'number' || typeof spec?.name !== 'string') {
         return { success: false, error: 'spec.id (number) and spec.name (string) are required' };
     }
@@ -1966,13 +1977,17 @@ export function updateGamestate() {
         name: spec.name,
         type: TaskType.Normal,
         cost_multiplier: spec.costMultiplier ?? 0,
-        skills: [],
+        skills: spec.skills ?? [],
         max_reps: spec.maxReps ?? 1,
         zone_id: GAMESTATE.current_zone,
+        free: spec.free ?? false,
     });
     const t = new Task(def);
     t.enabled = true;
     GAMESTATE.tasks.push(t);
+    // Create the DOM for the synthetic task right away — otherwise the
+    // next updateTaskRendering tick crashes on a missing task_element.
+    RENDERING.appendTask(t);
     _synthetic_task_callbacks.set(spec.id, onComplete);
     return { success: true, id: spec.id };
 };

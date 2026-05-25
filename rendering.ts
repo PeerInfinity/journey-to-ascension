@@ -2613,6 +2613,19 @@ export class Rendering {
         }
     }
 
+    // Append the DOM for a single task without rebuilding the rest.
+    // Used by injectSyntheticTask so the synthetic task gets an entry
+    // in task_elements before the next updateTaskRendering tick (which
+    // would otherwise crash on a missing task_element).
+    public appendTask(task: Task) {
+        const tasks_div = document.getElementById("tasks");
+        if (!tasks_div) {
+            console.error("The element with ID 'tasks' was not found.");
+            return;
+        }
+        createTaskDiv(task, tasks_div, this);
+    }
+
     constructor() {
         function getElement(name: string): HTMLElement {
             const energy_div = document.getElementById(name);

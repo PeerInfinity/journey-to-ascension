@@ -1,4 +1,4 @@
-import { TaskDefinition } from "./zones.js";
+import { Task, TaskDefinition } from "./zones.js";
 import { ItemType } from "./items.js";
 import { PerkType } from "./perks.js";
 import { RenderEvent } from "./events.js";
@@ -49,6 +49,7 @@ export declare class Rendering {
     artifact_order: ItemType[];
     viewing_last_reset: boolean;
     createTasks(): void;
+    appendTask(task: Task): void;
     constructor();
     initialize(): void;
     start(): void;

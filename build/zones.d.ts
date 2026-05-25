@@ -24,6 +24,7 @@ export declare class TaskDefinition {
     hidden_by_default: boolean;
     unlocks_task: number;
     zone_id: number;
+    free: boolean;
     constructor(overrides?: Partial<TaskDefinition>);
 }
 export declare class Task {
