@@ -13,6 +13,23 @@ export function setTickRate() {
 export let GAMESTATE = new Gamestate();
 export let RENDERING = new Rendering();
 let GAME_LOOP_INTERVAL = 0;
+// When loaded inside a substrate-controlled iframe (the wrapper appends
+// ?managed=1 to the iframe src), flip on managed mode synchronously —
+// before DOMContentLoaded fires — so GAMESTATE.start() skips loadGame
+// and the tick loop never starts. Without this, the auto-bootstrap
+// builds task DOM whose click handlers close over Task instances that
+// the bridge later orphans by replacing GAMESTATE, producing the
+// "first-load clicks register no completion until the next reset" bug.
+if (typeof window !== "undefined" && typeof window.location !== "undefined") {
+    const _params = new URLSearchParams(window.location.search);
+    if (_params.has("managed")) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const _setManagedMode = window.setManagedMode;
+        if (typeof _setManagedMode === "function") {
+            _setManagedMode(true);
+        }
+    }
+}
 document.addEventListener("DOMContentLoaded", () => {
     GAMESTATE.start();
     RENDERING.initialize();

@@ -1,5 +1,5 @@
 import { Task, ZONES, TaskType, TASK_LOOKUP, TaskDefinition } from "./zones.js";
-import { GAMESTATE, setTickRate } from "./game.js";
+import { GAMESTATE, RENDERING, setTickRate } from "./game.js";
 import { HASTE_MULT, ItemDefinition, ITEMS, ARTIFACTS, ItemType, MAGIC_RING_MULT, BOTTLED_LIGHTNING_MULT, NOTE_ITEMS } from "./items.js";
 import { getReflectionsOnTheJourneyExponent, PerkDefinition, PERKS, PerkType } from "./perks.js";
 import { SkillUpContext, EventType, RenderEvent, GainedPerkContext, UsedItemContext, UnlockedTaskContext, UnlockedSkillContext, EventContext, HighestZoneContext, SkippedTasksContext } from "./events.js";
@@ -1941,6 +1941,11 @@ export function updateGamestate() {
         }
         updateEnabledTasks();
     }
+    // resetTasks() creates fresh Task instances. The existing task DOM
+    // has click handlers closed over the previous Task instances, so
+    // we rebuild it here. RENDERING.createTasks() bails harmlessly if
+    // the DOM isn't ready yet (loadZone fired before DOMContentLoaded).
+    RENDERING.createTasks();
     return { success: true, zone: GAMESTATE.current_zone, taskCount: GAMESTATE.tasks.length };
 };
 
