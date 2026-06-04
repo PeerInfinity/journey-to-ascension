@@ -814,20 +814,25 @@ function handleEnergyResetItemCounts() {
         }
     }
 }
-// Highest zone index that has a Task granting each Item. Computed once from the
-// static zone data; used to tell whether a later zone could still grant an Item
-// this cycle (we never travel backwards within a cycle).
-const LAST_SOURCE_ZONE = (() => {
-    const map = new Map();
-    ZONES.forEach((zone, index) => {
-        for (const def of zone.tasks) {
-            if (def.item != ItemType.Count) {
-                map.set(def.item, index); // later zones overwrite earlier ones
+// Highest zone index that has a Task granting each Item. Built lazily on first
+// use (not at module load) to avoid reading ZONES during the circular-import
+// bootstrap, when it may not be initialized yet. Used to tell whether a later
+// zone could still grant an Item this cycle (we never travel backwards).
+let _last_source_zone = null;
+function lastSourceZone(item) {
+    if (_last_source_zone == null) {
+        const map = new Map();
+        ZONES.forEach((zone, index) => {
+            for (const def of zone.tasks) {
+                if (def.item != ItemType.Count) {
+                    map.set(def.item, index); // later zones overwrite earlier ones
+                }
             }
-        }
-    });
-    return map;
-})();
+        });
+        _last_source_zone = map;
+    }
+    return _last_source_zone.get(item) ?? -1;
+}
 // Whether any remaining Task rep this cycle could still grant the Item: an
 // unfinished source in the current zone, or any source in a later zone. Errs
 // toward "yes" (later-zone sources count even if automation won't reach them),
@@ -838,7 +843,7 @@ function canStillGainItemThisReset(item) {
             return true;
         }
     }
-    return (LAST_SOURCE_ZONE.get(item) ?? -1) > GAMESTATE.current_zone;
+    return lastSourceZone(item) > GAMESTATE.current_zone;
 }
 // How many copies of an Item can be used right now without changing how many
 // would be kept on the next Energy Reset — the "rounding-error" surplus.
