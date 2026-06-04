@@ -39,6 +39,7 @@ export declare function doEnergyReset(): void;
 export declare function calcItemEnergyGain(base_energy: number): number;
 export declare function addItem(item: ItemType, count: number): void;
 export declare function clickItem(item: ItemType, use_all: boolean): void;
+export declare function calcItemsKeptOnEnergyReset(item: ItemType, value: number): number;
 export declare function undoItemUse(): void;
 type ItemAmount = [item: ItemType, amount: number];
 export declare function gatherItemBonuses(skill: SkillType): ItemAmount[];
@@ -98,6 +99,7 @@ export interface GameMods {
     auto_haste: boolean;
     auto_use_cycle: boolean;
     auto_use_cycle_off_resets: number;
+    auto_use_free_items: boolean;
 }
 export declare function defaultMods(): GameMods;
 export declare function getMods(): GameMods;

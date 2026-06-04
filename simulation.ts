@@ -584,6 +584,10 @@ function applyFinishTaskRepEffects(task: Task) {
 
     const event = new RenderEvent(EventType.TaskCompleted, {});
     GAMESTATE.queueRenderEvent(event);
+
+    if (task.task_definition.item != ItemType.Count) {
+        maybeUseRoundingErrorItem(task.task_definition.item);
+    }
 }
 
 export function isTaskDisabledDueToTooStrongBoss(task: Task) {
@@ -969,17 +973,91 @@ export function clickItem(item: ItemType, use_all: boolean) {
     useItem(item, num_used);
 }
 
+// How many of an Item are kept after an Energy Reset, given a starting count.
+// UnderstandingTheReset keeps half (rounded up), otherwise none; Compulsive
+// Notetaking then raises note Items to a floor. Shared by the reset itself and
+// by the "use free Items" mod so the two never disagree on the rounding.
+export function calcItemsKeptOnEnergyReset(item: ItemType, value: number): number {
+    let kept = hasPerk(PerkType.UnderstandingTheReset) ? Math.ceil(value / 2) : 0;
+    if (hasPrestigeUnlock(PrestigeUnlockType.CompulsiveNotetaking) && NOTE_ITEMS.includes(item)) {
+        kept = Math.max(kept, COMPULSIVE_NOTE_TAKING_AMOUNT);
+    }
+    return kept;
+}
+
 function handleEnergyResetItemCounts() {
     for (const [key, value] of GAMESTATE.items) {
-        const new_value = hasPerk(PerkType.UnderstandingTheReset) ? Math.ceil(value / 2) : 0;
-        GAMESTATE.items.set(key, new_value);
+        GAMESTATE.items.set(key, calcItemsKeptOnEnergyReset(key, value));
     }
 
+    // CompulsiveNotetaking can grant note Items the player wasn't holding at all.
     if (hasPrestigeUnlock(PrestigeUnlockType.CompulsiveNotetaking)) {
         for (const item of NOTE_ITEMS) {
-            const new_value = Math.max(GAMESTATE.items.get(item) ?? 0, COMPULSIVE_NOTE_TAKING_AMOUNT);
-            GAMESTATE.items.set(item, new_value);
+            if (!GAMESTATE.items.has(item)) {
+                GAMESTATE.items.set(item, COMPULSIVE_NOTE_TAKING_AMOUNT);
+            }
         }
+    }
+}
+
+// Highest zone index that has a Task granting each Item. Computed once from the
+// static zone data; used to tell whether a later zone could still grant an Item
+// this cycle (we never travel backwards within a cycle).
+const LAST_SOURCE_ZONE: Map<ItemType, number> = (() => {
+    const map = new Map<ItemType, number>();
+    ZONES.forEach((zone, index) => {
+        for (const def of zone.tasks) {
+            if (def.item != ItemType.Count) {
+                map.set(def.item, index); // later zones overwrite earlier ones
+            }
+        }
+    });
+    return map;
+})();
+
+// Whether any remaining Task rep this cycle could still grant the Item: an
+// unfinished source in the current zone, or any source in a later zone. Errs
+// toward "yes" (later-zone sources count even if automation won't reach them),
+// so the "use free Items" mod never spends a copy that more reps could replace.
+function canStillGainItemThisReset(item: ItemType): boolean {
+    for (const task of GAMESTATE.tasks) {
+        if (task.task_definition.item == item && task.reps < task.task_definition.max_reps) {
+            return true;
+        }
+    }
+    return (LAST_SOURCE_ZONE.get(item) ?? -1) > GAMESTATE.current_zone;
+}
+
+// How many copies of an Item can be used right now without changing how many
+// would be kept on the next Energy Reset — the "rounding-error" surplus.
+function calcFreeToUseItems(item: ItemType): number {
+    const value = GAMESTATE.items.get(item) ?? 0;
+    if (value <= 0) {
+        return 0;
+    }
+    const kept = calcItemsKeptOnEnergyReset(item, value);
+    let free = 0;
+    while (free < value && calcItemsKeptOnEnergyReset(item, value - (free + 1)) == kept) {
+        free++;
+    }
+    return free;
+}
+
+// Game Mod — use "rounding-error" Items even on cycles where item auto-use is
+// off. Called when a Task rep grants an Item; once that was the last rep that
+// could grant it this cycle (so the count is final), use any copies that the
+// keep rounding would let us spend for free.
+function maybeUseRoundingErrorItem(item: ItemType) {
+    if (!GAMESTATE.mods.auto_use_free_items || item == ItemType.Count) {
+        return;
+    }
+    if (canStillGainItemThisReset(item)) {
+        return;
+    }
+    const free = calcFreeToUseItems(item);
+    if (free > 0) {
+        useItem(item, free);
+        disableItemUndo();
     }
 }
 
@@ -1723,6 +1801,7 @@ export interface GameMods {
     auto_haste: boolean;                 // smart auto-use of Scroll of Haste
     auto_use_cycle: boolean;             // cycle item auto-use across energy resets
     auto_use_cycle_off_resets: number;   // resets with auto-use off before one on
+    auto_use_free_items: boolean;        // use "rounding-error" Items that won't reduce keep
 }
 
 export function defaultMods(): GameMods {
@@ -1737,6 +1816,7 @@ export function defaultMods(): GameMods {
         auto_haste: false,
         auto_use_cycle: false,
         auto_use_cycle_off_resets: 1,
+        auto_use_free_items: false,
     };
 }
 
