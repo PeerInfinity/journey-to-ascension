@@ -158,6 +158,7 @@ export declare class Gamestate {
     hint_has_gotten_boss_hint: boolean;
     mods: GameMods;
     mods_granted_amulet: boolean;
+    mods_automation_panel_collapsed: boolean;
     start(): void;
     initialize(): void;
     popRenderEvents(): RenderEvent[];

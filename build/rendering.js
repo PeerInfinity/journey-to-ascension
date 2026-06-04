@@ -1503,7 +1503,8 @@ function setupSettings() {
         button.addEventListener("click", () => {
             setMod(toggle.mod, !isModEnabled(toggle.mod));
             updateSettingsDisplay();
-            updateRendering(); // reflect effects (e.g. Amulet grant) immediately
+            setupControls(); // rebuild so the automation panel appears/hides with the Amulet
+            updateRendering(); // reflect other effects immediately
         });
         setupTooltip(button, () => `${toggle.label}: ${isModEnabled(toggle.mod) ? "On" : "Off"}`, () => toggle.tooltip);
     }
@@ -1832,7 +1833,7 @@ function handleEvents() {
     }
 }
 // MARK: Controls
-function setupControls() {
+export function setupControls() {
     RENDERING.controls_list_element.innerHTML = "";
     // First row: toggle buttons
     const toggles_row = createChildElement(RENDERING.controls_list_element, "div");
@@ -1929,6 +1930,59 @@ function setupAutomationControls() {
         const tooltip = "The Zone you specify here will be used by the 'To Zone' automation";
         return tooltip;
     });
+    setupAdvancedAutomationControls(automation_div);
+}
+// Game Mods — extra automation toggles, shown as a collapsible panel under
+// the Task Automation controls (Amulet-gated, since the parent is). The
+// Scroll of Haste toggle is wired but its behavior is not implemented yet.
+const ADVANCED_AUTOMATION_TOGGLES = [
+    {
+        label: "Resume on Reset",
+        tooltip: "Keep automating after an Energy Reset instead of stopping. Restores the automation mode that was active before the reset.",
+        mod: "resume_automation_on_reset",
+    },
+    {
+        label: "Keep Auto Use Items",
+        tooltip: "Keep Auto Use Items enabled through a Prestige instead of turning it off.",
+        mod: "keep_auto_use_items",
+    },
+    {
+        label: "Auto Scroll of Haste",
+        tooltip: "Automatically use Scrolls of Haste during automation. (Not implemented yet — this toggle currently does nothing.)",
+        mod: "auto_haste",
+    },
+];
+function setupAdvancedAutomationControls(parent) {
+    const panel = createChildElement(parent, "div");
+    panel.className = "advanced-automation";
+    const header = createChildElement(panel, "div");
+    header.className = "advanced-automation-header";
+    const title = createChildElement(header, "span");
+    title.textContent = "Advanced Automation";
+    const toggle_icon = createChildElement(header, "span");
+    toggle_icon.className = "advanced-automation-icon";
+    toggle_icon.textContent = GAMESTATE.mods_automation_panel_collapsed ? "▶" : "▼";
+    const content = createChildElement(panel, "div");
+    content.className = "advanced-automation-content";
+    content.style.display = GAMESTATE.mods_automation_panel_collapsed ? "none" : "flex";
+    header.addEventListener("click", () => {
+        GAMESTATE.mods_automation_panel_collapsed = !GAMESTATE.mods_automation_panel_collapsed;
+        content.style.display = GAMESTATE.mods_automation_panel_collapsed ? "none" : "flex";
+        toggle_icon.textContent = GAMESTATE.mods_automation_panel_collapsed ? "▶" : "▼";
+    });
+    for (const toggle of ADVANCED_AUTOMATION_TOGGLES) {
+        const button = createChildElement(content, "button");
+        function refresh() {
+            button.className = isModEnabled(toggle.mod) ? "on" : "off";
+            button.textContent = `${toggle.label}: ${isModEnabled(toggle.mod) ? "On" : "Off"}`;
+        }
+        refresh();
+        button.addEventListener("click", () => {
+            setMod(toggle.mod, !isModEnabled(toggle.mod));
+            refresh();
+        });
+        setupTooltip(button, () => `${toggle.label}: ${isModEnabled(toggle.mod) ? "On" : "Off"}`, () => toggle.tooltip);
+    }
 }
 // MARK: Extra stats
 function updateExtraStats() {

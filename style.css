@@ -978,3 +978,39 @@ footer {
 .mod-fraction-row input {
     width: 80px;
 }
+
+/* Advanced Automation panel (Controls section) */
+.advanced-automation {
+    margin-top: 8px;
+    width: 100%;
+}
+
+.advanced-automation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    padding: 4px 8px;
+    background: var(--element-foreground-color);
+    border-radius: var(--default-border-radius);
+    font-weight: bold;
+}
+
+.advanced-automation-icon {
+    font-size: 0.8em;
+}
+
+.advanced-automation-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+/* Override the fixed 68x44 automation-button size for the panel toggles */
+#controls .advanced-automation-content button:not(.numeric-input-button) {
+    width: 100%;
+    height: auto;
+    padding: 6px 8px;
+    font-size: 0.85em;
+}

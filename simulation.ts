@@ -826,7 +826,17 @@ export function doEnergyReset() {
     modifyMaxEnergy(calcEnergeticMemoryGain());
     updatePrepRunHint(); // Needs to be before we reset the item use
 
+    // Game Mod — resume automation after the reset. Captured before
+    // doAnyReset zeroes automation_mode; scoped to energy resets (perks,
+    // incl. the Amulet that gates automation, are kept across them).
+    const resume_automation = GAMESTATE.mods.resume_automation_on_reset;
+    const saved_automation_mode = GAMESTATE.automation_mode;
+
     doAnyReset(); // Gotta be after the current_zone check in calcEnergeticMemoryGain
+
+    if (resume_automation) {
+        GAMESTATE.automation_mode = saved_automation_mode;
+    }
     GAMESTATE.energy_reset_count += 1;
     handleEnergyResetItemCounts();
     storeLoopStartNumbersForNextGameOver();
@@ -1493,8 +1503,14 @@ export function doPrestige() {
     GAMESTATE.power = 0;
     GAMESTATE.attunement = 0;
     GAMESTATE.prestige_available = false;
-    GAMESTATE.auto_use_items = false;
+    if (!GAMESTATE.mods.keep_auto_use_items) {
+        GAMESTATE.auto_use_items = false;
+    }
     GAMESTATE.unlocked_new_prestige_this_prestige = false;
+
+    // Re-apply mods after the perk wipe so force_automation re-grants the
+    // Amulet (which also keeps auto_use_items meaningful through prestige).
+    applyMods();
 
     if (!hasPrestigeUnlock(PrestigeUnlockType.SeeBeyondTheVeil))
     {
@@ -1796,6 +1812,7 @@ export class Gamestate {
     // disabling the mod doesn't strip a legitimately earned one.
     mods: GameMods = defaultMods();
     mods_granted_amulet = false;
+    mods_automation_panel_collapsed = true; // Advanced Automation panel UI state
 
     public start() {
         // In managed mode the host owns persistence — skip reading from

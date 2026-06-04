@@ -15,6 +15,7 @@ export declare function formatNumber(n: number, allow_decimals?: boolean): strin
 export declare function formatInt(n: number): string;
 export declare function formatPercentage(n: number): string;
 export declare function updateSettingsDisplay(): void;
+export declare function setupControls(): void;
 export declare class Rendering {
     tooltipped_element: ElementWithTooltip | null;
     potential_tooltipped_element: ElementWithTooltip | null;
