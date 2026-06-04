@@ -1941,13 +1941,8 @@ const ADVANCED_AUTOMATION_TOGGLES = [
         mod: "resume_automation_on_reset",
     },
     {
-        label: "Keep Auto Use Items",
-        tooltip: "Keep Auto Use Items enabled through a Prestige instead of turning it off.",
-        mod: "keep_auto_use_items",
-    },
-    {
         label: "Auto Scroll of Haste",
-        tooltip: "Automatically spend held Scrolls of Haste during automation, ahead of energy-expensive Task reps. Uses one when a rep's energy cost is high relative to your remaining energy divided by the Scrolls you hold — so the more Scrolls you have, the more freely they're spent. Only acts while Auto Use Items is enabled, so under an Auto Use Cycle it runs only on the cycles that spend items.",
+        tooltip: "Automatically spend held Scrolls of Haste during automation, on Task reps you couldn't otherwise afford — when a single rep would cost more energy than you have left. The Scroll's speed-up lowers that rep's energy cost so the run can continue. Only acts while Auto Use Items is enabled, so under an Auto Use Cycle it runs only on the cycles that spend items.",
         mod: "auto_haste",
     },
     {

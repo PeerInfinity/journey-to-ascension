@@ -37,7 +37,7 @@ const ZONE_SPEEDUP_BASE = 1.05;
 export const BOSS_MAX_ENERGY_DISPARITY = 5;
 const STARTING_ENERGY = 100;
 const DEFAULT_TICK_RATE = 66.6;
-export const SAVE_VERSION = "1.3.0";
+export const SAVE_VERSION = "1.4.0";
 const TASK_STARTED_PROGRESS = 0.01;
 
 // MARK: Skills
@@ -434,12 +434,13 @@ function updateActiveTask() {
 }
 
 // Game Mod — smart auto-use of Scroll of Haste. Before an automated Task rep
-// starts, spend a held Scroll of Haste on it when the rep is energy-expensive
-// relative to our per-scroll energy budget. Mirrors the Prismatic Adventure
-// "auto-apply armor" heuristic (use when cost > energy / itemsHeld): the more
-// Scrolls we hold, the more freely we spend them. Pushes into the haste queue
-// (via the item's on_consume) so applyTaskRepStartEffects then applies it to
-// this rep just like a manually-used Scroll.
+// starts, spend a held Scroll of Haste on it when a single rep would cost more
+// energy than we have left — i.e. we couldn't otherwise afford it, and the
+// Scroll's speed-up (which lowers the rep's energy cost) lets the run continue.
+// The threshold is independent of how many Scrolls we hold, so earning another
+// doesn't change when they get spent. Pushes into the haste queue (via the
+// item's on_consume) so applyTaskRepStartEffects then applies it to this rep
+// just like a manually-used Scroll.
 function maybeAutoUseHaste(task: Task) {
     if (!GAMESTATE.mods.auto_haste) {
         return;
@@ -456,8 +457,7 @@ function maybeAutoUseHaste(task: Task) {
     }
     const lightning = GAMESTATE.queued_lightning > 0 && task.task_definition.type == TaskType.Boss;
     const cost = calcTaskEnergyCost(task, false, lightning);
-    const budget = GAMESTATE.current_energy / scrolls_held;
-    if (cost > budget) {
+    if (cost > GAMESTATE.current_energy) {
         useItem(ItemType.ScrollOfHaste, 1);
         disableItemUndo();
     }
@@ -1638,13 +1638,11 @@ export function doPrestige() {
     GAMESTATE.power = 0;
     GAMESTATE.attunement = 0;
     GAMESTATE.prestige_available = false;
-    if (!GAMESTATE.mods.keep_auto_use_items) {
-        GAMESTATE.auto_use_items = false;
-    }
+    GAMESTATE.auto_use_items = false;
     GAMESTATE.unlocked_new_prestige_this_prestige = false;
 
     // Re-apply mods after the perk wipe so force_automation re-grants the
-    // Amulet (which also keeps auto_use_items meaningful through prestige).
+    // Amulet that gates automation and auto-use.
     applyMods();
 
     if (!hasPrestigeUnlock(PrestigeUnlockType.SeeBeyondTheVeil))
@@ -1802,7 +1800,6 @@ export interface GameMods {
 
     // Advanced Automation panel — Controls section (right column)
     resume_automation_on_reset: boolean; // restore automation mode/target after a reset
-    keep_auto_use_items: boolean;        // keep auto-use items enabled through prestige
     auto_haste: boolean;                 // smart auto-use of Scroll of Haste
     auto_use_cycle: boolean;             // cycle item auto-use across energy resets
     auto_use_cycle_off_resets: number;   // resets with auto-use off before one on
@@ -1817,7 +1814,6 @@ export function defaultMods(): GameMods {
         auto_continue_energy_reset: false,
         suppress_prestige_popup: false,
         resume_automation_on_reset: false,
-        keep_auto_use_items: false,
         auto_haste: false,
         auto_use_cycle: false,
         auto_use_cycle_off_resets: 1,
