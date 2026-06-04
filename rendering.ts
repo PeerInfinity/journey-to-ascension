@@ -1,5 +1,5 @@
 import { Task, TaskDefinition, ZONES, TaskType, PERKS_BY_ZONE, ITEMS_BY_ZONE } from "./zones.js";
-import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, BOSS_MAX_ENERGY_DISPARITY, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone } from "./simulation.js";
+import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, BOSS_MAX_ENERGY_DISPARITY, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, type GameMods } from "./simulation.js";
 import { GAMESTATE, RENDERING, resetSave } from "./game.js";
 import { ItemType, ItemDefinition, ITEMS, HASTE_MULT, ARTIFACTS, MAGIC_RING_MULT, BOTTLED_LIGHTNING_MULT } from "./items.js";
 import { PerkDefinition, PerkType, PERKS, getPerkNameWithEmoji } from "./perks.js";
@@ -1693,6 +1693,36 @@ export function formatPercentage(n: number) {
 
 // MARK: Settings
 
+// Boolean "Game Mods" toggles shown in the Settings overlay (the
+// purple-button set from the prismatic mod, mapped to JtA). The Advanced
+// Automation mods live in the Controls section instead (see phase 5).
+const SETTINGS_MOD_TOGGLES: { id: string; label: string; tooltip: string; mod: keyof GameMods }[] = [
+    {
+        id: "mod-force-automation",
+        label: "Force Automation",
+        tooltip: "Permanently grants the Amulet perk, unlocking Zone Automation and automatic Item use. Turning this off won't remove an Amulet you earned legitimately.",
+        mod: "force_automation",
+    },
+    {
+        id: "mod-award-spark-on-discovery",
+        label: "Award Spark on Discovery",
+        tooltip: "Awards a fraction of the full prestige Divine Spark each time you complete a Prestige task. Manual prestige still awards the full amount on top.",
+        mod: "award_spark_on_discovery",
+    },
+    {
+        id: "mod-auto-continue-energy-reset",
+        label: "Auto-continue Energy Reset",
+        tooltip: "Skips the Energy Reset summary overlay and continues immediately.",
+        mod: "auto_continue_energy_reset",
+    },
+    {
+        id: "mod-suppress-prestige-popup",
+        label: "Suppress Prestige Popup",
+        tooltip: "Suppresses the notification shown when Prestige first becomes available.",
+        mod: "suppress_prestige_popup",
+    },
+];
+
 function setupSettings() {
     const settings_div = RENDERING.settings_element;
     const open_button = document.querySelector<HTMLElement>("#open-settings");
@@ -1799,10 +1829,39 @@ function setupSettings() {
         return "When using Task Autmation, this setting decides what to do if the next queued Task is blocked (E.G., too strong a Boss). Will either pause the automation, or keep running automated with the Task skipped";
     });
 
+    // Game Mods toggles
+    for (const toggle of SETTINGS_MOD_TOGGLES) {
+        const button = settings_div.querySelector<HTMLElement>(`#${toggle.id}`);
+        if (!button) {
+            console.error(`No ${toggle.id} button`);
+            continue;
+        }
+        button.addEventListener("click", () => {
+            setMod(toggle.mod, !isModEnabled(toggle.mod));
+            updateSettingsDisplay();
+            updateRendering(); // reflect effects (e.g. Amulet grant) immediately
+        });
+        setupTooltip(button, () => `${toggle.label}: ${isModEnabled(toggle.mod) ? "On" : "Off"}`, () => toggle.tooltip);
+    }
+
+    // Discovery spark fraction (decimal, unbounded)
+    const fraction_input = settings_div.querySelector<HTMLInputElement>("#mod-discovery-fraction");
+    if (!fraction_input) {
+        console.error("No mod-discovery-fraction input");
+    } else {
+        fraction_input.addEventListener("change", () => {
+            const val = parseFloat(fraction_input.value);
+            if (!Number.isNaN(val)) {
+                setMod("discovery_spark_fraction", val);
+            }
+            updateSettingsDisplay();
+        });
+    }
+
     updateSettingsDisplay();
 }
 
-function updateSettingsDisplay() {
+export function updateSettingsDisplay() {
     const settings_div = RENDERING.settings_element;
 
     const manual_tooltips_button = settings_div.querySelector<HTMLElement>("#manual-tooltips");
@@ -1820,6 +1879,20 @@ function updateSettingsDisplay() {
     }
 
     skip_blocked_button.textContent = GAMESTATE.automation_skip_blocked ? "Skip on Block" : "Pause on Block";
+
+    // Game Mods toggle labels
+    for (const toggle of SETTINGS_MOD_TOGGLES) {
+        const button = settings_div.querySelector<HTMLElement>(`#${toggle.id}`);
+        if (button) {
+            button.textContent = `${toggle.label}: ${isModEnabled(toggle.mod) ? "On" : "Off"}`;
+        }
+    }
+
+    // Discovery spark fraction (don't clobber the field while it's being edited)
+    const fraction_input = settings_div.querySelector<HTMLInputElement>("#mod-discovery-fraction");
+    if (fraction_input && document.activeElement !== fraction_input) {
+        fraction_input.value = `${getMod("discovery_spark_fraction")}`;
+    }
 }
 
 // MARK: Settings: Saves

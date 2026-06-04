@@ -1,4 +1,4 @@
-import { handleHotkeyPressed, handleHotkeyReleased, Rendering, updateRendering } from "./rendering.js";
+import { handleHotkeyPressed, handleHotkeyReleased, Rendering, updateRendering, updateSettingsDisplay } from "./rendering.js";
 import { Gamestate, saveGame, updateGamestate, resetTasks, calcTickRate, isManagedMode, getMods, getMod, setMod, type GameMods } from "./simulation.js";
 
 function gameLoop() {
@@ -120,6 +120,7 @@ export function resetSave() {
     const ok = setMod(name, value);
     if (ok) {
         updateRendering();
+        updateSettingsDisplay();
     }
     return ok;
 };
