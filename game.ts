@@ -1,5 +1,5 @@
 import { handleHotkeyPressed, handleHotkeyReleased, Rendering, updateRendering } from "./rendering.js";
-import { Gamestate, saveGame, updateGamestate, resetTasks, calcTickRate, isManagedMode } from "./simulation.js";
+import { Gamestate, saveGame, updateGamestate, resetTasks, calcTickRate, isManagedMode, getMods, getMod, setMod, type GameMods } from "./simulation.js";
 
 function gameLoop() {
     updateGamestate();
@@ -101,4 +101,25 @@ export function resetSave() {
     GAMESTATE = new Gamestate();
     GAMESTATE.initialize();
     return true;
+};
+
+// MARK: Game Mods API (for substrate / AP host and console use)
+//
+// Mods stay available in managed mode; the host drives them through these.
+// Names are the GameMods field keys (see simulation.ts). setMod applies
+// side-effects and persists; updateRendering refreshes the UI immediately.
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).getMods = () => getMods();
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).getMod = (name: keyof GameMods) => getMod(name);
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).setMod = (name: keyof GameMods, value: boolean | number) => {
+    const ok = setMod(name, value);
+    if (ok) {
+        updateRendering();
+    }
+    return ok;
 };

@@ -1,5 +1,5 @@
 import { handleHotkeyPressed, handleHotkeyReleased, Rendering, updateRendering } from "./rendering.js";
-import { Gamestate, saveGame, updateGamestate, resetTasks, calcTickRate, isManagedMode } from "./simulation.js";
+import { Gamestate, saveGame, updateGamestate, resetTasks, calcTickRate, isManagedMode, getMods, getMod, setMod } from "./simulation.js";
 function gameLoop() {
     updateGamestate();
     updateRendering();
@@ -86,5 +86,22 @@ window.initializeHeadless = () => {
     GAMESTATE = new Gamestate();
     GAMESTATE.initialize();
     return true;
+};
+// MARK: Game Mods API (for substrate / AP host and console use)
+//
+// Mods stay available in managed mode; the host drives them through these.
+// Names are the GameMods field keys (see simulation.ts). setMod applies
+// side-effects and persists; updateRendering refreshes the UI immediately.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.getMods = () => getMods();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.getMod = (name) => getMod(name);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.setMod = (name, value) => {
+    const ok = setMod(name, value);
+    if (ok) {
+        updateRendering();
+    }
+    return ok;
 };
 //# sourceMappingURL=game.js.map

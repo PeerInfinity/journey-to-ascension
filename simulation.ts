@@ -37,7 +37,7 @@ const ZONE_SPEEDUP_BASE = 1.05;
 export const BOSS_MAX_ENERGY_DISPARITY = 5;
 const STARTING_ENERGY = 100;
 const DEFAULT_TICK_RATE = 66.6;
-export const SAVE_VERSION = "1.1.1";
+export const SAVE_VERSION = "1.2.0";
 const TASK_STARTED_PROGRESS = 0.01;
 
 // MARK: Skills
@@ -1614,6 +1614,100 @@ function loadGameFromData(data: any) {
     if (GAMESTATE.highest_prestige_zone == 0 && GAMESTATE.prestige_count > 0) {
         GAMESTATE.highest_prestige_zone = GAMESTATE.highest_zone_ever;
     }
+
+    // Merge mods over defaults so saves from before a given mod existed (or
+    // from before mods at all) get safe values for any missing field.
+    GAMESTATE.mods = { ...defaultMods(), ...(GAMESTATE.mods ?? {}) };
+    applyMods();
+}
+
+// MARK: Game Mods
+
+// Opt-in "Game Mods" — balance / cheat / automation / friction toggles.
+// All default off/neutral so the base game is unchanged unless the player
+// (or, in managed mode, the host via the window API) turns one on. See
+// MODS_PLAN.md (mods branch) for the design.
+export interface GameMods {
+    // Settings overlay — the "Game Mods" toggles
+    award_spark_on_discovery: boolean;   // award divine spark when a Prestige task completes
+    discovery_spark_fraction: number;    // fraction of full prestige gain awarded on discovery
+    force_automation: boolean;           // permanently grant the Amulet (automation) perk
+    auto_continue_energy_reset: boolean; // skip the energy-reset summary overlay
+    suppress_prestige_popup: boolean;    // suppress the "prestige available" popup
+
+    // Advanced Automation panel — Controls section (right column)
+    resume_automation_on_reset: boolean; // restore automation mode/target after a reset
+    keep_auto_use_items: boolean;        // keep auto-use items enabled through prestige
+    auto_haste: boolean;                 // smart auto-use of Scroll of Haste
+}
+
+export function defaultMods(): GameMods {
+    return {
+        award_spark_on_discovery: false,
+        discovery_spark_fraction: 0.1,
+        force_automation: false,
+        auto_continue_energy_reset: false,
+        suppress_prestige_popup: false,
+        resume_automation_on_reset: false,
+        keep_auto_use_items: false,
+        auto_haste: false,
+    };
+}
+
+export function getMods(): GameMods {
+    return GAMESTATE.mods;
+}
+
+export function isModEnabled(name: keyof GameMods): boolean {
+    return Boolean(GAMESTATE.mods[name]);
+}
+
+export function getMod(name: keyof GameMods): boolean | number {
+    return GAMESTATE.mods[name];
+}
+
+// Set a mod by name with light type coercion, then apply side-effects.
+// Returns false (and logs) for unknown names or invalid numeric values.
+export function setMod(name: keyof GameMods, value: boolean | number): boolean {
+    if (!(name in GAMESTATE.mods)) {
+        console.error(`Unknown mod: ${String(name)}`);
+        return false;
+    }
+    const current = GAMESTATE.mods[name];
+    if (typeof current === "number") {
+        const num = typeof value === "number" ? value : Number(value);
+        if (Number.isNaN(num)) {
+            console.error(`Invalid numeric value for mod ${String(name)}: ${String(value)}`);
+            return false;
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (GAMESTATE.mods as any)[name] = num;
+    } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (GAMESTATE.mods as any)[name] = Boolean(value);
+    }
+    applyMods();
+    saveGame();
+    return true;
+}
+
+// Apply mod side-effects. Safe to call on load and after any mod change.
+// Behaviors are filled in across later phases (force_automation perk grant,
+// etc.); kept centralized so the window API and UI share one entry point.
+export function applyMods() {
+    // force_automation: grant the Amulet perk while enabled, without stripping
+    // a legitimately earned Amulet when disabled.
+    if (GAMESTATE.mods.force_automation && !hasPerk(PerkType.Amulet)) {
+        GAMESTATE.perks.set(PerkType.Amulet, true);
+        GAMESTATE.mods_granted_amulet = true;
+    } else if (!GAMESTATE.mods.force_automation && GAMESTATE.mods_granted_amulet) {
+        // Only remove the Amulet if this mod is what granted it — and never if
+        // the player legitimately owns the Permanent Automation prestige unlock.
+        if (!hasPrestigeUnlock(PrestigeUnlockType.PermanentAutomation)) {
+            GAMESTATE.perks.set(PerkType.Amulet, false);
+        }
+        GAMESTATE.mods_granted_amulet = false;
+    }
 }
 
 // MARK: Gamestate
@@ -1683,6 +1777,12 @@ export class Gamestate {
     hint_has_gotten_prep_run_hint = false;
     hint_has_gotten_boss_hint = false;
 
+    // Game Mods (opt-in toggles; see GameMods above). mods_granted_amulet
+    // tracks whether force_automation is what granted the Amulet perk, so
+    // disabling the mod doesn't strip a legitimately earned one.
+    mods: GameMods = defaultMods();
+    mods_granted_amulet = false;
+
     public start() {
         // In managed mode the host owns persistence — skip reading from
         // localStorage and go straight to a fresh initialize.
@@ -1695,6 +1795,7 @@ export class Gamestate {
         resetTasks();
         initializeSkills();
         GAMESTATE.save_version = SAVE_VERSION;
+        applyMods();
     }
 
     public popRenderEvents(): RenderEvent[] {

@@ -6,7 +6,7 @@ import { SkillType } from "./skills.js";
 import { PrestigeRepeatableType, PrestigeUnlockType, PrestigeLayer } from "./prestige_upgrades.js";
 export declare function isManagedMode(): boolean;
 export declare const BOSS_MAX_ENERGY_DISPARITY = 5;
-export declare const SAVE_VERSION = "1.1.1";
+export declare const SAVE_VERSION = "1.2.0";
 export declare class Skill {
     type: SkillType;
     level: number;
@@ -87,6 +87,22 @@ export declare function doPrestige(): void;
 export declare function calcPerkySpeedMultiplier(): number;
 export declare const SAVE_LOCATION = "incrementalGameSave";
 export declare function saveGame(): void;
+export interface GameMods {
+    award_spark_on_discovery: boolean;
+    discovery_spark_fraction: number;
+    force_automation: boolean;
+    auto_continue_energy_reset: boolean;
+    suppress_prestige_popup: boolean;
+    resume_automation_on_reset: boolean;
+    keep_auto_use_items: boolean;
+    auto_haste: boolean;
+}
+export declare function defaultMods(): GameMods;
+export declare function getMods(): GameMods;
+export declare function isModEnabled(name: keyof GameMods): boolean;
+export declare function getMod(name: keyof GameMods): boolean | number;
+export declare function setMod(name: keyof GameMods, value: boolean | number): boolean;
+export declare function applyMods(): void;
 export declare class Gamestate {
     save_version: string;
     tasks: Task[];
@@ -140,6 +156,8 @@ export declare class Gamestate {
     hint_non_prep_runs_done: number;
     hint_has_gotten_prep_run_hint: boolean;
     hint_has_gotten_boss_hint: boolean;
+    mods: GameMods;
+    mods_granted_amulet: boolean;
     start(): void;
     initialize(): void;
     popRenderEvents(): RenderEvent[];
