@@ -1,6 +1,6 @@
 # Game Mods — Planning Document
 
-Status: **Draft for review (rev 2)** · Branch: `mods` (off `substrate`, merges back to `substrate`) · Date: 2026-06-04
+Status: **Ready to implement (rev 3)** · Branch: `mods` (off `substrate`, merges back to `substrate`) · Date: 2026-06-04
 
 ## 1. Goal
 
@@ -59,8 +59,9 @@ Design principles:
 
 - **Only `Amulet` gates automation** → the "unlock automation" cheat is simply
   granting `Amulet` (the automation-related perk), nothing broader.
-- **No serenity / no reset divisor** → the balance mod is a **prestige-gain
-  multiplier**, not a divisor swap.
+- **No serenity / no reset divisor** → the prestige mod is **award-on-discovery
+  with a configurable fraction** (default 10%) of the full gain; manual prestige
+  is unchanged and the two stack.
 - **Armor ≈ `ScrollOfHaste`.** Other prismatic items may have JtA analogues
   (`MagicRing`, etc.) — to be mapped later.
 - **Dropped** (already in JtA or N/A): stop-automation-at-zone (`automation_end`),
@@ -77,8 +78,7 @@ collapsible **Advanced Automation** panel.
 
 | Mod | Field | Hook | Behavior |
 |---|---|---|---|
-| Prestige gain multiplier (free-form number) | `mods.prestige_gain_mult = 1` | wrap return of `calcDivineSparkGainFromHighestZone` (`simulation.ts:1342`) | Multiplies divine spark gained, via the existing `createNumericInput` (`rendering.ts:37`) — free-form is cheap. |
-| Award prestige currency on discovery | `mods.award_spark_on_discovery = false` | prestige-task completion (`simulation.ts:509`) | When a `TaskType.Prestige` task completes, award `calcDivineSparkGain()` (× multiplier) immediately, instead of only on manual prestige. **Guard against double-award** with the later `doPrestige()` (decision in §9). |
+| Award prestige currency on discovery (+ decimal fraction) | `mods.award_spark_on_discovery = false`, `mods.discovery_spark_fraction = 0.1` | prestige-task completion (`simulation.ts:509`) | When a `TaskType.Prestige` task completes, immediately award `discovery_spark_fraction × calcDivineSparkGain()` divine spark (default 10% of the full prestige amount). **Manual `doPrestige()` is unchanged** — it still awards the full amount, and the two **stack by design** (no double-award guard). Fraction is a **decimal, unbounded**, via `createNumericInput` (`rendering.ts:37`). |
 | Permanently unlock automation | `mods.force_automation = false` | grant `PerkType.Amulet` via `tryAddPerk` (`simulation.ts:1359`); re-apply on load & on toggle | Same effect as the `PermanentAutomation` prestige unlock, for free. Toggling off must **not strip a legitimately earned Amulet** — track whether the grant came from the mod (mirrors the prismatic "don't delete legit unlocks" fix). |
 | Auto-continue on energy reset | `mods.auto_continue_energy_reset = false` | energy-reset summary / `#game-over-overlay` (`rendering.ts:2654`, `:1309`) | Skip/auto-dismiss the energy-reset summary overlay and continue immediately (friction reducer; analogue of "disable pause on game over"). |
 | Suppress prestige-available popup | `mods.suppress_prestige_popup = false` | `EventType.PrestigeAvailable` handling (`simulation.ts:510` → its render event) | JtA analogue of "disable serenity-unlocked modal." |
@@ -93,10 +93,11 @@ controls (`setupAutomationControls`, `rendering.ts:2176`); only shown when
 |---|---|---|---|
 | Resume automation on reset | `mods.resume_automation_on_reset = false` | `doAnyReset()` (`simulation.ts:787`) | Capture `automation_mode` + `automation_end` before the reset zeroes them; restore after. |
 | Keep auto-use items through prestige | `mods.keep_auto_use_items = false` | `doPrestige()` (`simulation.ts:1480`) | Don't force `auto_use_items` back to false on prestige. |
-| Smart auto-use Scroll of Haste | `mods.auto_haste = false` | task-start / energy-drain estimation in automation path | Armor → `ScrollOfHaste` analogue: auto-use a Scroll of Haste ahead of energy-expensive automated tasks. **Exact heuristic + which other items get analogues (`MagicRing`, …) to be detailed later.** |
+| Smart auto-use Scroll of Haste | `mods.auto_haste = false` | task-start / energy-drain estimation in automation path | Armor → `ScrollOfHaste` analogue: auto-use a Scroll of Haste ahead of energy-expensive automated tasks. **Scroll of Haste only for now** — exact heuristic TBD during implementation. |
 
-> The panel is the place future per-item auto-use rules will be added as their
-> JtA analogues are worked out.
+> Scope is **Scroll of Haste only** for this first draft. Other item analogues
+> (`MagicRing`, `BottledLightning`, …) are deferred and will be added to this
+> panel later.
 
 ## 5. Architecture
 
@@ -145,8 +146,8 @@ apply immediately. Document the name → field mapping next to the API.
    round-trips, old-save loading, and API get/set.
 2. **Settings UI (§4a)** — markup + `setupSettings`/`updateSettingsDisplay`
    wiring + numeric input; toggles flip state only.
-3. **Balance + cheat behaviors** — prestige multiplier, award-on-discovery
-   (+ double-award guard), force-automation unlock (+ legit-unlock protection).
+3. **Cheat + prestige behaviors** — award-on-discovery (fraction of full gain;
+   manual prestige unchanged), force-automation unlock (+ legit-unlock protection).
 4. **Friction behaviors** — auto-continue energy reset, suppress prestige popup.
 5. **Advanced Automation panel (§4b)** — collapsible Controls-section panel:
    resume-on-reset, keep-auto-use, smart Scroll of Haste.
@@ -172,14 +173,10 @@ mode + JS API · no "unlock all perks" (automation perk only) · no "lock
 automation order" · free-form prestige multiplier · Advanced Automation lives in
 the Controls section, Game Mods toggles live in Settings.
 
-**Still open:**
-1. **Award-on-discovery vs manual prestige** — when `award_spark_on_discovery`
-   is on, should manual `doPrestige()` still award spark (double-dip), or only
-   reset? (Prismatic awarded on the action and treated prestige as separate.)
-   Proposed: award on discovery, and have manual prestige reset *without*
-   re-awarding.
-2. **Item auto-use scope** — confirm `ScrollOfHaste` heuristic and which other
-   items (`MagicRing`, `BottledLightning`, …) get auto-use analogues. (You'll
-   look at this more closely later.)
-3. **Prestige multiplier bounds** — any sane min/max on the free-form input
-   (e.g. ≥ 1, integer vs decimal)?
+Also resolved (rev 3): award-on-discovery grants a **decimal, unbounded
+fraction** (default 0.1) of the full gain, and **manual prestige still awards
+the full amount** (they stack) · item auto-use is **Scroll of Haste only** for
+this draft, other items deferred.
+
+**Still open:** none blocking — remaining specifics (Scroll of Haste heuristic)
+are implementation details to settle in Phase 5.
