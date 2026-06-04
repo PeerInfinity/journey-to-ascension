@@ -355,8 +355,10 @@ function maybeAutoUseHaste(task) {
     if (!GAMESTATE.mods.auto_haste) {
         return;
     }
-    // Only during automation, and never stack on top of an already-queued Scroll.
-    if (GAMESTATE.automation_mode == AutomationMode.Off || GAMESTATE.queued_scrolls_of_haste > 0) {
+    // Only when item auto-use is currently enabled — so under an Auto Use Cycle
+    // it fires only on the "on" runs — during automation, and never stacking on
+    // top of an already-queued Scroll.
+    if (!GAMESTATE.auto_use_items || GAMESTATE.automation_mode == AutomationMode.Off || GAMESTATE.queued_scrolls_of_haste > 0) {
         return;
     }
     const scrolls_held = GAMESTATE.items.get(ItemType.ScrollOfHaste) ?? 0;
@@ -1392,7 +1394,7 @@ export function defaultMods() {
         keep_auto_use_items: false,
         auto_haste: false,
         auto_use_cycle: false,
-        auto_use_cycle_off_resets: 4,
+        auto_use_cycle_off_resets: 1,
     };
 }
 export function getMods() {

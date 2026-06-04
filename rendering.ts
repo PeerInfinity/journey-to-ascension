@@ -2356,7 +2356,7 @@ const ADVANCED_AUTOMATION_TOGGLES: { label: string; tooltip: string; mod: keyof 
     },
     {
         label: "Auto Scroll of Haste",
-        tooltip: "Automatically spend held Scrolls of Haste during automation, ahead of energy-expensive Task reps. Uses one when a rep's energy cost is high relative to your remaining energy divided by the Scrolls you hold — so the more Scrolls you have, the more freely they're spent.",
+        tooltip: "Automatically spend held Scrolls of Haste during automation, ahead of energy-expensive Task reps. Uses one when a rep's energy cost is high relative to your remaining energy divided by the Scrolls you hold — so the more Scrolls you have, the more freely they're spent. Only acts while Auto Use Items is enabled, so under an Auto Use Cycle it runs only on the cycles that spend items.",
         mod: "auto_haste",
     },
 ];
