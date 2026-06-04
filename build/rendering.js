@@ -1933,8 +1933,7 @@ function setupAutomationControls() {
     setupAdvancedAutomationControls(automation_div);
 }
 // Game Mods — extra automation toggles, shown as a collapsible panel under
-// the Task Automation controls (Amulet-gated, since the parent is). The
-// Scroll of Haste toggle is wired but its behavior is not implemented yet.
+// the Task Automation controls (Amulet-gated, since the parent is).
 const ADVANCED_AUTOMATION_TOGGLES = [
     {
         label: "Resume on Reset",
@@ -1948,7 +1947,7 @@ const ADVANCED_AUTOMATION_TOGGLES = [
     },
     {
         label: "Auto Scroll of Haste",
-        tooltip: "Automatically use Scrolls of Haste during automation. (Not implemented yet — this toggle currently does nothing.)",
+        tooltip: "Automatically spend held Scrolls of Haste during automation, ahead of energy-expensive Task reps. Uses one when a rep's energy cost is high relative to your remaining energy divided by the Scrolls you hold — so the more Scrolls you have, the more freely they're spent.",
         mod: "auto_haste",
     },
 ];
@@ -1983,6 +1982,36 @@ function setupAdvancedAutomationControls(parent) {
         });
         setupTooltip(button, () => `${toggle.label}: ${isModEnabled(toggle.mod) ? "On" : "Off"}`, () => toggle.tooltip);
     }
+    setupAutoUseCycleControl(content);
+}
+// Auto Use Cycle (Game Mod): a toggle plus a numeric input for how many Energy
+// Resets run with Auto Use Items off before one runs with it on. Lives in the
+// Advanced Automation panel alongside the simple toggles.
+function setupAutoUseCycleControl(content) {
+    const cycle_button = createChildElement(content, "button");
+    function refresh() {
+        const on = GAMESTATE.mods.auto_use_cycle;
+        cycle_button.className = on ? "on" : "off";
+        cycle_button.textContent = `Auto Use Cycle: ${on ? "On" : "Off"}`;
+    }
+    refresh();
+    cycle_button.addEventListener("click", () => {
+        setMod("auto_use_cycle", !GAMESTATE.mods.auto_use_cycle);
+        refresh();
+    });
+    setupTooltip(cycle_button, () => `Auto Use Cycle: ${GAMESTATE.mods.auto_use_cycle ? "On" : "Off"}`, () => "Cycle Auto Use Items across Energy Resets: keep it off for the set number of resets (banking Items), then on for one reset (spending them), and repeat. Overrides the manual Auto Use Items toggle while enabled. The cycle restarts on Prestige.");
+    const cycle_label = createChildElement(content, "label");
+    cycle_label.className = "advanced-automation-label";
+    cycle_label.textContent = "Resets off per cycle:";
+    createNumericInput(cycle_label, {
+        min: 0,
+        max: 99,
+        initialValue: GAMESTATE.mods.auto_use_cycle_off_resets,
+        ariaLabel: "Energy Resets with Auto Use Items off per cycle",
+        onChange: (value) => {
+            setMod("auto_use_cycle_off_resets", value);
+        },
+    });
 }
 // MARK: Extra stats
 function updateExtraStats() {

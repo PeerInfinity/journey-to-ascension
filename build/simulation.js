@@ -34,7 +34,7 @@ const ZONE_SPEEDUP_BASE = 1.05;
 export const BOSS_MAX_ENERGY_DISPARITY = 5;
 const STARTING_ENERGY = 100;
 const DEFAULT_TICK_RATE = 66.6;
-export const SAVE_VERSION = "1.2.0";
+export const SAVE_VERSION = "1.3.0";
 const TASK_STARTED_PROGRESS = 0.01;
 // MARK: Skills
 export class Skill {
@@ -344,8 +344,36 @@ function updateActiveTask() {
     }
     saveGame();
 }
+// Game Mod — smart auto-use of Scroll of Haste. Before an automated Task rep
+// starts, spend a held Scroll of Haste on it when the rep is energy-expensive
+// relative to our per-scroll energy budget. Mirrors the Prismatic Adventure
+// "auto-apply armor" heuristic (use when cost > energy / itemsHeld): the more
+// Scrolls we hold, the more freely we spend them. Pushes into the haste queue
+// (via the item's on_consume) so applyTaskRepStartEffects then applies it to
+// this rep just like a manually-used Scroll.
+function maybeAutoUseHaste(task) {
+    if (!GAMESTATE.mods.auto_haste) {
+        return;
+    }
+    // Only during automation, and never stack on top of an already-queued Scroll.
+    if (GAMESTATE.automation_mode == AutomationMode.Off || GAMESTATE.queued_scrolls_of_haste > 0) {
+        return;
+    }
+    const scrolls_held = GAMESTATE.items.get(ItemType.ScrollOfHaste) ?? 0;
+    if (scrolls_held <= 0 || isSingleTickTask(task)) {
+        return; // nothing to spend, or the rep is too cheap to be worth a Scroll
+    }
+    const lightning = GAMESTATE.queued_lightning > 0 && task.task_definition.type == TaskType.Boss;
+    const cost = calcTaskEnergyCost(task, false, lightning);
+    const budget = GAMESTATE.current_energy / scrolls_held;
+    if (cost > budget) {
+        useItem(ItemType.ScrollOfHaste, 1);
+        disableItemUndo();
+    }
+}
 // Note that free executions don't call this
 export function applyTaskRepStartEffects(task) {
+    maybeAutoUseHaste(task);
     if (GAMESTATE.queued_scrolls_of_haste > 0) {
         task.hasted = true;
         GAMESTATE.queued_scrolls_of_haste--;
@@ -662,6 +690,25 @@ function calcEnergeticMemoryGain() {
     energy_gain *= 1 + energized_level * ENERGIZED_PERK_INCREASE;
     return energy_gain;
 }
+// Game Mod — cycle item auto-use across Energy Resets: run the configured
+// number of resets with Auto Use Items off (banking Items), then one reset
+// with it on (spending the stockpile), and repeat. Called once per Energy
+// Reset; drives GAMESTATE.auto_use_items, overriding the manual toggle while
+// the mod is enabled. The counter persists in the save and resets on Prestige.
+function applyAutoUseCycle() {
+    if (!GAMESTATE.mods.auto_use_cycle) {
+        return;
+    }
+    const off_resets = Math.max(0, Math.floor(GAMESTATE.mods.auto_use_cycle_off_resets));
+    if (GAMESTATE.auto_use_cycle_counter >= off_resets) {
+        GAMESTATE.auto_use_items = true;
+        GAMESTATE.auto_use_cycle_counter = 0;
+    }
+    else {
+        GAMESTATE.auto_use_items = false;
+        GAMESTATE.auto_use_cycle_counter += 1;
+    }
+}
 export function doEnergyReset() {
     modifyMaxEnergy(calcEnergeticMemoryGain());
     updatePrepRunHint(); // Needs to be before we reset the item use
@@ -675,6 +722,7 @@ export function doEnergyReset() {
         GAMESTATE.automation_mode = saved_automation_mode;
     }
     GAMESTATE.energy_reset_count += 1;
+    applyAutoUseCycle();
     handleEnergyResetItemCounts();
     storeLoopStartNumbersForNextGameOver();
     skipFreeZones();
@@ -1206,6 +1254,7 @@ export function doPrestige() {
     handleEnergyResetItemCounts();
     GAMESTATE.energy_reset_info = new EnergyResetInfo();
     GAMESTATE.energy_reset_count = 0;
+    GAMESTATE.auto_use_cycle_counter = 0;
     GAMESTATE.max_energy = STARTING_ENERGY;
     GAMESTATE.current_energy = STARTING_ENERGY;
     GAMESTATE.power = 0;
@@ -1342,6 +1391,8 @@ export function defaultMods() {
         resume_automation_on_reset: false,
         keep_auto_use_items: false,
         auto_haste: false,
+        auto_use_cycle: false,
+        auto_use_cycle_off_resets: 4,
     };
 }
 export function getMods() {
@@ -1435,6 +1486,7 @@ export class Gamestate {
     current_energy = STARTING_ENERGY;
     max_energy = STARTING_ENERGY;
     energy_reset_count = 0;
+    auto_use_cycle_counter = 0; // position within the auto-use cycle (Game Mod)
     power = 0;
     has_unlocked_power = false;
     attunement = 0;

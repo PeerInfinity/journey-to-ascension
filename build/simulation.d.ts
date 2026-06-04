@@ -6,7 +6,7 @@ import { SkillType } from "./skills.js";
 import { PrestigeRepeatableType, PrestigeUnlockType, PrestigeLayer } from "./prestige_upgrades.js";
 export declare function isManagedMode(): boolean;
 export declare const BOSS_MAX_ENERGY_DISPARITY = 5;
-export declare const SAVE_VERSION = "1.2.0";
+export declare const SAVE_VERSION = "1.3.0";
 export declare class Skill {
     type: SkillType;
     level: number;
@@ -96,6 +96,8 @@ export interface GameMods {
     resume_automation_on_reset: boolean;
     keep_auto_use_items: boolean;
     auto_haste: boolean;
+    auto_use_cycle: boolean;
+    auto_use_cycle_off_resets: number;
 }
 export declare function defaultMods(): GameMods;
 export declare function getMods(): GameMods;
@@ -140,6 +142,7 @@ export declare class Gamestate {
     current_energy: number;
     max_energy: number;
     energy_reset_count: number;
+    auto_use_cycle_counter: number;
     power: number;
     has_unlocked_power: boolean;
     attunement: number;
