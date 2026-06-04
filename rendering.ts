@@ -1378,6 +1378,15 @@ function populateEndOfContent(end_of_content_div: HTMLElement) {
 }
 
 function updateGameOver() {
+    // Game Mod — skip the energy-reset summary overlay and continue
+    // immediately (keeps the current Auto Use Items setting). doEnergyReset
+    // restores energy, so this can't re-trigger on the same depletion.
+    if (GAMESTATE.is_in_energy_reset && isModEnabled("auto_continue_energy_reset")) {
+        RENDERING.energy_reset_element.classList.add("hidden");
+        doEnergyReset();
+        return;
+    }
+
     const showing_energy_reset = !RENDERING.energy_reset_element.classList.contains("hidden") && !RENDERING.viewing_last_reset;
     if (!showing_energy_reset && GAMESTATE.is_in_energy_reset) {
         populateEnergyReset(RENDERING.energy_reset_element);
