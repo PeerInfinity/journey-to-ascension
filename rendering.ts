@@ -2356,7 +2356,7 @@ const ADVANCED_AUTOMATION_TOGGLES: { label: string; tooltip: string; mod: keyof 
     },
     {
         label: "Use Free Items",
-        tooltip: "Even on cycles where Auto Use Items is off, automatically use Items you can spend without reducing how many you keep on the next Energy Reset (the surplus left by the keep rounding). Each Item is used once the last Task rep that could grant it this cycle has finished, so its kept count is unaffected.",
+        tooltip: "Even on cycles where Auto Use Items is off, automatically use Items you can spend without reducing how many you keep on the next Energy Reset (the surplus left by the keep rounding). Each Item is used once the last Task rep that could grant it this cycle has finished, so its kept count is unaffected. Artifacts (such as Scrolls of Haste) are excluded.",
         mod: "auto_use_free_items",
     },
 ];

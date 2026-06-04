@@ -434,13 +434,12 @@ function updateActiveTask() {
 }
 
 // Game Mod — smart auto-use of Scroll of Haste. Before an automated Task rep
-// starts, spend a held Scroll of Haste on it when a single rep would cost more
-// energy than we have left — i.e. we couldn't otherwise afford it, and the
-// Scroll's speed-up (which lowers the rep's energy cost) lets the run continue.
-// The threshold is independent of how many Scrolls we hold, so earning another
-// doesn't change when they get spent. Pushes into the haste queue (via the
-// item's on_consume) so applyTaskRepStartEffects then applies it to this rep
-// just like a manually-used Scroll.
+// starts, spend a held Scroll of Haste on it when the rep is energy-expensive
+// relative to our per-scroll energy budget. Mirrors the Prismatic Adventure
+// "auto-apply armor" heuristic (use when cost > energy / itemsHeld): the more
+// Scrolls we hold, the more freely we spend them. Pushes into the haste queue
+// (via the item's on_consume) so applyTaskRepStartEffects then applies it to
+// this rep just like a manually-used Scroll.
 function maybeAutoUseHaste(task: Task) {
     if (!GAMESTATE.mods.auto_haste) {
         return;
@@ -457,7 +456,8 @@ function maybeAutoUseHaste(task: Task) {
     }
     const lightning = GAMESTATE.queued_lightning > 0 && task.task_definition.type == TaskType.Boss;
     const cost = calcTaskEnergyCost(task, false, lightning);
-    if (cost > GAMESTATE.current_energy) {
+    const budget = GAMESTATE.current_energy / scrolls_held;
+    if (cost > budget) {
         useItem(ItemType.ScrollOfHaste, 1);
         disableItemUndo();
     }
@@ -1054,6 +1054,11 @@ function calcFreeToUseItems(item: ItemType): number {
 // keep rounding would let us spend for free.
 function maybeUseRoundingErrorItem(item: ItemType) {
     if (!GAMESTATE.mods.auto_use_free_items || item == ItemType.Count) {
+        return;
+    }
+    // Only ordinary Items, never Artifacts — they're strategic and have their
+    // own handling (e.g. auto_haste for Scrolls), matching autoUseItems().
+    if (ARTIFACTS.includes(item)) {
         return;
     }
     if (canStillGainItemThisReset(item)) {
