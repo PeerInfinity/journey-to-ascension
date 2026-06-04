@@ -20,7 +20,8 @@ export var EventType;
     EventType[EventType["SkippedZones"] = 13] = "SkippedZones";
     EventType[EventType["SkippedTasks"] = 14] = "SkippedTasks";
     EventType[EventType["UsedItems"] = 15] = "UsedItems";
-    EventType[EventType["Count"] = 16] = "Count";
+    EventType[EventType["AwardedSparkOnDiscovery"] = 16] = "AwardedSparkOnDiscovery";
+    EventType[EventType["Count"] = 17] = "Count";
 })(EventType || (EventType = {}));
 export class EventContext {
 }
@@ -58,5 +59,8 @@ export class HighestZoneContext extends EventContext {
 }
 export class SkippedTasksContext extends EventContext {
     tasks = 0;
+}
+export class AwardedSparkContext extends EventContext {
+    amount = 0;
 }
 //# sourceMappingURL=events.js.map

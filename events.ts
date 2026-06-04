@@ -20,6 +20,7 @@ export enum EventType {
     SkippedZones,
     SkippedTasks,
     UsedItems,
+    AwardedSparkOnDiscovery,
 
     Count
 }
@@ -69,4 +70,8 @@ export class HighestZoneContext extends EventContext {
 
 export class SkippedTasksContext extends EventContext {
     tasks: number = 0;
+}
+
+export class AwardedSparkContext extends EventContext {
+    amount: number = 0;
 }

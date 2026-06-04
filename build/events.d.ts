@@ -19,7 +19,8 @@ export declare enum EventType {
     SkippedZones = 13,
     SkippedTasks = 14,
     UsedItems = 15,
-    Count = 16
+    AwardedSparkOnDiscovery = 16,
+    Count = 17
 }
 export declare class EventContext {
 }
@@ -54,5 +55,8 @@ export declare class HighestZoneContext extends EventContext {
 }
 export declare class SkippedTasksContext extends EventContext {
     tasks: number;
+}
+export declare class AwardedSparkContext extends EventContext {
+    amount: number;
 }
 //# sourceMappingURL=events.d.ts.map

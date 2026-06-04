@@ -2,7 +2,7 @@ import { Task, ZONES, TaskType, TASK_LOOKUP, TaskDefinition } from "./zones.js";
 import { GAMESTATE, RENDERING, setTickRate } from "./game.js";
 import { HASTE_MULT, ItemDefinition, ITEMS, ARTIFACTS, ItemType, MAGIC_RING_MULT, BOTTLED_LIGHTNING_MULT, NOTE_ITEMS } from "./items.js";
 import { getReflectionsOnTheJourneyExponent, PerkDefinition, PERKS, PerkType } from "./perks.js";
-import { SkillUpContext, EventType, RenderEvent, GainedPerkContext, UsedItemContext, UnlockedTaskContext, UnlockedSkillContext, EventContext, HighestZoneContext, SkippedTasksContext } from "./events.js";
+import { SkillUpContext, EventType, RenderEvent, GainedPerkContext, UsedItemContext, UnlockedTaskContext, UnlockedSkillContext, EventContext, HighestZoneContext, SkippedTasksContext, AwardedSparkContext } from "./events.js";
 import { SKILL_DEFINITIONS, SkillDefinition, SKILLS, SkillType } from "./skills.js";
 import { PRESTIGE_UNLOCKABLES, PRESTIGE_REPEATABLES, PrestigeRepeatableType, PrestigeUnlock, PrestigeUnlockType, PrestigeRepeatable, DIVINE_KNOWLEDGE_MULT, DIVINE_APPETITE_ENERGY_ITEM_BOOST_MULT, GOTTA_GO_FAST_BASE, PrestigeLayer, DIVINE_LIGHTNING_EXPONENT_INCREASE, TRANSCENDANT_APTITUDE_MULT, ENERGIZED_INCREASE, DIVINE_SPEED_TICKS_PER_PERCENT, PERKY_BASE, COMPULSIVE_NOTE_TAKING_AMOUNT, ENERGIZED_PERK_INCREASE, MANDATORY_SCHMANDATORY_MULT, DIVINE_ATTUNEMENT_BASE, SPITE_THE_GODS_MULT, DIVINER_KNOWLEDGE_MULT, GODLY_TRAVEL_MULT, FINAL_PRESTIGE_MULT, DIVINE_SUPREMACY_ENERGY } from "./prestige_upgrades.js";
 import { AWAKENING_DIVINE_SPARK_MULT, DEFIED_THE_GODS_SPARK_MULT, ENERGETIC_MEMORY_MULT, MAJOR_TIME_COMPRESSION_EFFECT, SUPPLY_LINES_EFFECT, UNIFIED_THEORY_OF_MAGIC_EFFECT } from "./simulation_constants.js";
@@ -508,8 +508,22 @@ function onFullyFinishTask(task: Task) {
 
     if (task.task_definition.type == TaskType.Prestige && !GAMESTATE.prestige_available) {
         GAMESTATE.prestige_available = true;
-        const event = new RenderEvent(EventType.PrestigeAvailable, {});
-        GAMESTATE.queueRenderEvent(event);
+        if (!GAMESTATE.mods.suppress_prestige_popup) {
+            const event = new RenderEvent(EventType.PrestigeAvailable, {});
+            GAMESTATE.queueRenderEvent(event);
+        }
+    }
+
+    // Game Mod — award a fraction of the full prestige currency each time a
+    // Prestige task completes. Manual prestige still awards the full amount.
+    if (task.task_definition.type == TaskType.Prestige && GAMESTATE.mods.award_spark_on_discovery) {
+        const amount = Math.ceil(calcDivineSparkGain() * GAMESTATE.mods.discovery_spark_fraction);
+        if (amount > 0) {
+            GAMESTATE.divine_spark += amount;
+            const context = new AwardedSparkContext();
+            context.amount = amount;
+            GAMESTATE.queueRenderEvent(new RenderEvent(EventType.AwardedSparkOnDiscovery, context));
+        }
     }
 }
 
