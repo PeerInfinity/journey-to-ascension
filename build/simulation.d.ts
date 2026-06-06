@@ -6,7 +6,7 @@ import { SkillType } from "./skills.js";
 import { PrestigeRepeatableType, PrestigeUnlockType, PrestigeLayer } from "./prestige_upgrades.js";
 export declare function isManagedMode(): boolean;
 export declare const BOSS_MAX_ENERGY_DISPARITY = 5;
-export declare const SAVE_VERSION = "1.4.0";
+export declare const SAVE_VERSION = "1.5.0";
 export declare class Skill {
     type: SkillType;
     level: number;
@@ -40,6 +40,15 @@ export declare function calcItemEnergyGain(base_energy: number): number;
 export declare function addItem(item: ItemType, count: number): void;
 export declare function clickItem(item: ItemType, use_all: boolean): void;
 export declare function calcItemsKeptOnEnergyReset(item: ItemType, value: number): number;
+export interface ArtifactTaskSpec {
+    task_id: number;
+    item: ItemType;
+    zone_id: number;
+    done: boolean;
+}
+export declare function addArtifactTask(item: ItemType): number;
+export declare function removeArtifactTask(task_id: number): void;
+export declare function getArtifactTasks(): ArtifactTaskSpec[];
 export declare function undoItemUse(): void;
 type ItemAmount = [item: ItemType, amount: number];
 export declare function gatherItemBonuses(skill: SkillType): ItemAmount[];
@@ -99,6 +108,7 @@ export interface GameMods {
     auto_use_cycle: boolean;
     auto_use_cycle_off_resets: number;
     auto_use_free_items: boolean;
+    artifact_tasks_item_cycle_only: boolean;
 }
 export declare function defaultMods(): GameMods;
 export declare function getMods(): GameMods;
@@ -111,6 +121,8 @@ export declare class Gamestate {
     tasks: Task[];
     active_task: Task | null;
     unlocked_tasks: number[];
+    artifact_tasks: ArtifactTaskSpec[];
+    next_artifact_task_id: number;
     current_zone: number;
     highest_zone: number;
     highest_zone_fully_completed: number;

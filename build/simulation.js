@@ -34,8 +34,12 @@ const ZONE_SPEEDUP_BASE = 1.05;
 export const BOSS_MAX_ENERGY_DISPARITY = 5;
 const STARTING_ENERGY = 100;
 const DEFAULT_TICK_RATE = 66.6;
-export const SAVE_VERSION = "1.4.0";
+export const SAVE_VERSION = "1.5.0";
 const TASK_STARTED_PROGRESS = 0.01;
+// Player-scheduled "use this artifact here" tasks get ids in this range — well
+// above zone task ids and the host's synthetic exit tasks (>= 10000) — so they
+// can never collide and are easy to recognise.
+const ARTIFACT_TASK_ID_BASE = 1_000_000;
 // MARK: Skills
 export class Skill {
     type = SkillType.Count;
@@ -481,6 +485,13 @@ function applyFinishTaskRepEffects(task) {
     if (task.task_definition.item != ItemType.Count) {
         maybeUseRoundingErrorItem(task.task_definition.item);
     }
+    // Scheduled artifact task: using it is the whole point of the task.
+    const artifact_spec = getArtifactTaskSpec(task.task_definition.id);
+    if (artifact_spec && (GAMESTATE.items.get(artifact_spec.item) ?? 0) > 0) {
+        artifact_spec.done = true;
+        useItem(artifact_spec.item, 1);
+        disableItemUndo();
+    }
 }
 export function isTaskDisabledDueToTooStrongBoss(task) {
     if (task.progress > 0) {
@@ -519,6 +530,15 @@ function updateEnabledTasks() {
     for (const task of GAMESTATE.tasks) {
         const finished = task.reps >= task.task_definition.max_reps;
         task.enabled = !finished && !isTaskDisabledWithoutBeingFinished(task);
+        // Scheduled artifact task: only runnable while we hold a copy, and —
+        // if the global flag is set — only on item (auto-use) cycles. Otherwise
+        // it's left disabled, so the automation queue skips past it.
+        const artifact_spec = getArtifactTaskSpec(task.task_definition.id);
+        if (artifact_spec) {
+            const held = GAMESTATE.items.get(artifact_spec.item) ?? 0;
+            const cycle_ok = !GAMESTATE.mods.artifact_tasks_item_cycle_only || GAMESTATE.auto_use_items;
+            task.enabled = task.enabled && held > 0 && cycle_ok;
+        }
         has_unfinished_mandatory_task = has_unfinished_mandatory_task
             || (task.task_definition.type == TaskType.Mandatory && !finished)
             || (task.task_definition.type == TaskType.Prestige && !finished);
@@ -559,6 +579,7 @@ function initializeTasks() {
             }
         }
     }
+    injectArtifactTasksForCurrentZone();
     updateEnabledTasks();
 }
 export function toggleRepeatTasks() {
@@ -671,6 +692,7 @@ export function calcEnergyDrainPerTick(task, is_single_tick) {
 }
 function doAnyReset() {
     GAMESTATE.current_zone = 0;
+    resetArtifactTaskCycleState();
     resetTasks();
     GAMESTATE.current_energy = GAMESTATE.max_energy;
     GAMESTATE.is_in_energy_reset = false;
@@ -879,6 +901,79 @@ function maybeUseRoundingErrorItem(item) {
     if (free > 0) {
         useItem(item, free);
         disableItemUndo();
+    }
+}
+function isArtifactTaskId(id) {
+    return id >= ARTIFACT_TASK_ID_BASE;
+}
+function getArtifactTaskSpec(id) {
+    return GAMESTATE.artifact_tasks.find(spec => spec.task_id == id);
+}
+function makeArtifactTask(spec) {
+    const item_def = ITEMS[spec.item];
+    const def = new TaskDefinition({
+        id: spec.task_id,
+        name: `Use ${item_def.name}`,
+        type: TaskType.Normal,
+        cost_multiplier: 0,
+        max_reps: 1,
+        zone_id: spec.zone_id,
+        free: true,
+        skills: [],
+    });
+    const task = new Task(def);
+    task.reps = spec.done ? def.max_reps : 0; // a spec that already fired shows as finished
+    return task;
+}
+// Add a Task for every artifact spec in the current zone that isn't already
+// present. Called on zone load and after a save load.
+function injectArtifactTasksForCurrentZone() {
+    for (const spec of GAMESTATE.artifact_tasks) {
+        if (spec.zone_id != GAMESTATE.current_zone) {
+            continue;
+        }
+        if (GAMESTATE.tasks.some(t => t.task_definition.id == spec.task_id)) {
+            continue;
+        }
+        GAMESTATE.tasks.push(makeArtifactTask(spec));
+    }
+}
+// Schedule using one copy of `item` as a task in the current zone. Returns the
+// new task id. The caller (UI) is responsible for re-rendering the task list.
+export function addArtifactTask(item) {
+    const spec = {
+        task_id: GAMESTATE.next_artifact_task_id++,
+        item,
+        zone_id: GAMESTATE.current_zone,
+        done: false,
+    };
+    GAMESTATE.artifact_tasks.push(spec);
+    if (spec.zone_id == GAMESTATE.current_zone) {
+        GAMESTATE.tasks.push(makeArtifactTask(spec));
+        updateEnabledTasks();
+    }
+    saveGame();
+    return spec.task_id;
+}
+// Remove a scheduled artifact task, dropping its live Task and any priority.
+export function removeArtifactTask(task_id) {
+    GAMESTATE.artifact_tasks = GAMESTATE.artifact_tasks.filter(spec => spec.task_id != task_id);
+    GAMESTATE.tasks = GAMESTATE.tasks.filter(t => t.task_definition.id != task_id);
+    for (const [, prios] of GAMESTATE.automation_prios) {
+        const idx = prios.indexOf(task_id);
+        if (idx >= 0) {
+            prios.splice(idx, 1);
+        }
+    }
+    saveGame();
+}
+export function getArtifactTasks() {
+    return GAMESTATE.artifact_tasks;
+}
+// Clear the per-cycle "fired" flags. Called from doAnyReset.
+function resetArtifactTaskCycleState() {
+    for (const spec of GAMESTATE.artifact_tasks) {
+        spec.done = false;
     }
 }
 function autoUseItems() {
@@ -1403,6 +1498,12 @@ export function saveGame() {
             if (value instanceof Map) {
                 saveData[key] = Array.from(value.entries());
             }
+            else if (key == "tasks") {
+                // Artifact tasks are rebuilt from artifact_tasks on load; their
+                // ids aren't in TASK_LOOKUP, so excluding them avoids the
+                // task_definition reviver yielding undefined.
+                saveData[key] = value.filter(t => !isArtifactTaskId(t.task_definition.id));
+            }
             else {
                 saveData[key] = value;
             }
@@ -1465,6 +1566,10 @@ function loadGameFromData(data) {
     // from before mods at all) get safe values for any missing field.
     GAMESTATE.mods = { ...defaultMods(), ...(GAMESTATE.mods ?? {}) };
     applyMods();
+    // Artifact tasks are excluded from the saved `tasks`; rebuild the current
+    // zone's from the persisted specs (load doesn't go through initializeTasks).
+    injectArtifactTasksForCurrentZone();
+    updateEnabledTasks();
 }
 export function defaultMods() {
     return {
@@ -1478,6 +1583,7 @@ export function defaultMods() {
         auto_use_cycle: false,
         auto_use_cycle_off_resets: 1,
         auto_use_free_items: false,
+        artifact_tasks_item_cycle_only: false,
     };
 }
 export function getMods() {
@@ -1539,6 +1645,11 @@ export class Gamestate {
     tasks = [];
     active_task = null;
     unlocked_tasks = [];
+    // Player-scheduled artifact-use tasks (see ArtifactTaskSpec). The specs are
+    // durable; the Task objects are re-injected per zone, so these are excluded
+    // from the serialized `tasks` and rebuilt from here on load.
+    artifact_tasks = [];
+    next_artifact_task_id = ARTIFACT_TASK_ID_BASE;
     current_zone = 0;
     highest_zone = 0;
     highest_zone_fully_completed = -1;
@@ -1763,6 +1874,21 @@ window.useItem = (itemType, useAll = false) => {
     clickItem(itemType, useAll);
     return { success: true, used: useAll ? count : 1 };
 };
+// Schedule / unschedule using an artifact as a task in the current zone.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.addArtifactTask = (itemType) => {
+    const id = addArtifactTask(itemType);
+    RENDERING.createTasks();
+    return { success: true, taskId: id };
+};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.removeArtifactTask = (taskId) => {
+    removeArtifactTask(taskId);
+    RENDERING.createTasks();
+    return { success: true };
+};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.getArtifactTasks = () => getArtifactTasks();
 // Available tasks in the current zone.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 window.getAvailableTasks = () => {
