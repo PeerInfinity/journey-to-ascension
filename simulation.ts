@@ -1354,12 +1354,15 @@ export function toggleAutomation(task: TaskDefinition) {
     }
     else {
         prios.push(task.id);
-        // Ensure travel always happens last
+        // Ensure travel always happens last. Ids without a TASK_LOOKUP entry
+        // (synthetic/injected tasks — host exit tasks, and the upcoming
+        // artifact tasks) aren't Travel, so treat a missing lookup as non-Travel
+        // instead of dereferencing undefined.
         prios.sort((a, b) => {
-            const task_a = TASK_LOOKUP.get(a) as TaskDefinition;
-            const task_b = TASK_LOOKUP.get(b) as TaskDefinition;
-            if (task_a.type == TaskType.Travel || task_b.type == TaskType.Travel) {
-                return task_a.type == TaskType.Travel ? 1 : -1;
+            const a_travel = TASK_LOOKUP.get(a)?.type == TaskType.Travel;
+            const b_travel = TASK_LOOKUP.get(b)?.type == TaskType.Travel;
+            if (a_travel || b_travel) {
+                return a_travel ? 1 : -1;
             }
             return 0;
         });
