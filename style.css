@@ -1164,3 +1164,25 @@ footer {
     border-left: 3px solid #8c386d;
     padding-left: 4px;
 }
+
+.queue-exclude-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 3px;
+    padding-left: 4px;
+}
+
+.queue-exclude-label {
+    font-size: 0.8em;
+    opacity: 0.85;
+}
+
+.queue-exclude-chip {
+    height: 24px;
+    min-width: 24px;
+    padding: 0 4px;
+    border-radius: var(--default-border-radius);
+    cursor: pointer;
+}

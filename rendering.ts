@@ -1,5 +1,5 @@
 import { Task, TaskDefinition, ZONES, TaskType, PERKS_BY_ZONE, ITEMS_BY_ZONE } from "./zones.js";
-import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, BOSS_MAX_ENERGY_DISPARITY, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId, getQueueConfigs, getActiveQueueIndex, getQueueRunsOnCurrent, advanceQueueCycle, addQueue, removeQueue, setQueueItemCycle, setQueueRepeatCount, setQueueName, moveQueue, setActiveQueue, isEditMode, enterEditMode, exitEditMode, setEditZone, getEditMaxZone, type GameMods } from "./simulation.js";
+import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, BOSS_MAX_ENERGY_DISPARITY, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId, getQueueConfigs, getActiveQueueIndex, getQueueRunsOnCurrent, advanceQueueCycle, addQueue, removeQueue, setQueueAutoUseMode, getQueueExcludedItems, addQueueExcludedItem, removeQueueExcludedItem, setQueueRepeatCount, setQueueName, moveQueue, setActiveQueue, isEditMode, enterEditMode, exitEditMode, setEditZone, getEditMaxZone, type AutoUseMode, type GameMods } from "./simulation.js";
 import { GAMESTATE, RENDERING, resetSave } from "./game.js";
 import { ItemType, ItemDefinition, ITEMS, HASTE_MULT, ARTIFACTS, MAGIC_RING_MULT, BOTTLED_LIGHTNING_MULT } from "./items.js";
 import { PerkDefinition, PerkType, PERKS, getPerkNameWithEmoji } from "./perks.js";
@@ -1065,6 +1065,13 @@ function createItemDiv(item: ItemType, items_div: HTMLElement) {
         if (RENDERING.artifact_task_mode == "add" && ARTIFACTS.includes(item)) {
             addArtifactTask(item);
             RENDERING.createTasks();
+            return;
+        }
+        // In exclude pick-mode, clicking a regular item adds it to the queue's
+        // exclude list instead of using it.
+        if (RENDERING.exclude_pick_queue != null && !ARTIFACTS.includes(item)) {
+            addQueueExcludedItem(RENDERING.exclude_pick_queue, item);
+            setupControls();
             return;
         }
         clickItem(item, false);
@@ -2572,6 +2579,7 @@ function setupQueueCycleControl(content: Element) {
     button.textContent = `Queue Cycle: ${on ? "On" : "Off"}`;
     button.addEventListener("click", () => {
         setMod("queue_cycle", !GAMESTATE.mods.queue_cycle);
+        RENDERING.exclude_pick_queue = null;
         setupControls();
         recreateTasks(); // the active queue's plan may now be live
     });
@@ -2605,6 +2613,7 @@ function setupQueueCycleControl(content: Element) {
     list_title.textContent = `Queues — ${summary}`;
     list_header.addEventListener("click", () => {
         GAMESTATE.queue_list_collapsed = !GAMESTATE.queue_list_collapsed;
+        RENDERING.exclude_pick_queue = null;
         saveGame();
         setupControls();
     });
@@ -2676,12 +2685,18 @@ function setupQueueCycleControl(content: Element) {
         setupTooltip(edit_button, () => "Edit this queue", () =>
             "Make this queue active so you can view and edit its task priorities and artifact tasks. The cycle continues from here.");
 
+        const modes: AutoUseMode[] = ["all", "none", "exclude"];
+        const mode = queue.auto_use_mode;
+        const mode_label = mode == "all" ? "All" : mode == "none" ? "None" : "Exclude";
         const item_button = createChildElement(row, "button") as HTMLButtonElement;
-        item_button.className = "queue-config-btn" + (queue.auto_use_items ? " on" : "");
-        item_button.textContent = queue.auto_use_items ? "Items: On" : "Items: Off";
-        item_button.addEventListener("click", () => { setQueueItemCycle(i, !queue.auto_use_items); setupControls(); });
-        setupTooltip(item_button, () => "Item cycle", () =>
-            "Whether Auto Use Items is on while this queue is active (i.e. this is an item cycle).");
+        item_button.className = "queue-config-btn" + (mode != "none" ? " on" : "");
+        item_button.textContent = `Items: ${mode_label}`;
+        item_button.addEventListener("click", () => {
+            setQueueAutoUseMode(i, modes[(modes.indexOf(mode) + 1) % modes.length] as AutoUseMode);
+            setupControls();
+        });
+        setupTooltip(item_button, () => `Items: ${mode_label}`, () =>
+            "Auto-use for this queue. All: use everything. None: use nothing. Exclude: use everything except the listed items (saving them for a later queue). Click to cycle.");
 
         const repeat_label = createChildElement(row, "label");
         repeat_label.className = "queue-config-repeat";
@@ -2709,6 +2724,38 @@ function setupQueueCycleControl(content: Element) {
         delete_button.textContent = "✕";
         delete_button.addEventListener("click", () => { removeQueue(i); recreateTasks(); setupControls(); });
         setupTooltip(delete_button, () => "Delete this queue", () => "Remove this saved queue from the cycle.");
+
+        // Row 3 (Exclude mode only): the excluded items + an Add pick-mode button.
+        if (mode == "exclude") {
+            const exclude_row = createChildElement(entry, "div");
+            exclude_row.className = "queue-exclude-row";
+
+            const exclude_label = createChildElement(exclude_row, "span");
+            exclude_label.className = "queue-exclude-label";
+            exclude_label.textContent = "Exclude:";
+
+            for (const item of getQueueExcludedItems(i)) {
+                const definition = ITEMS[item] as ItemDefinition;
+                const chip = createChildElement(exclude_row, "button") as HTMLButtonElement;
+                chip.className = "queue-exclude-chip";
+                chip.textContent = definition ? definition.icon : "?";
+                chip.addEventListener("click", () => { removeQueueExcludedItem(i, item); setupControls(); });
+                setupTooltip(chip, () => definition ? definition.name : "Item", () =>
+                    `Click to stop excluding ${definition ? definition.name : "this item"}.`);
+            }
+
+            const picking = RENDERING.exclude_pick_queue == i;
+            const add_exclude = createChildElement(exclude_row, "button") as HTMLButtonElement;
+            add_exclude.className = "queue-config-btn" + (picking ? " on" : "");
+            add_exclude.textContent = picking ? "Click items…" : "Add";
+            add_exclude.addEventListener("click", () => {
+                RENDERING.exclude_pick_queue = picking ? null : i;
+                RENDERING.artifact_task_mode = null; // pick modes are mutually exclusive
+                setupControls();
+            });
+            setupTooltip(add_exclude, () => "Add excluded item", () =>
+                "Click here, then click items in your inventory to add them to this queue's exclude list. Click Add again to stop.");
+        }
     }
 
     const add_button = createChildElement(content, "button") as HTMLButtonElement;
@@ -3071,6 +3118,9 @@ export class Rendering {
     // Pick-mode for scheduling artifact tasks: "add" intercepts the next
     // inventory-artifact click, "remove" intercepts the next artifact-task click.
     artifact_task_mode: "add" | "remove" | null = null;
+    // When set, clicking a (non-artifact) inventory item adds it to this queue's
+    // exclude list instead of using it.
+    exclude_pick_queue: number | null = null;
 
     public createTasks() {
         const tasks_div = document.getElementById("tasks");

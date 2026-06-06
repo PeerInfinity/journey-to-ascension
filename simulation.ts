@@ -37,7 +37,7 @@ const ZONE_SPEEDUP_BASE = 1.05;
 export const BOSS_MAX_ENERGY_DISPARITY = 5;
 const STARTING_ENERGY = 100;
 const DEFAULT_TICK_RATE = 66.6;
-export const SAVE_VERSION = "1.7.0";
+export const SAVE_VERSION = "1.8.0";
 const TASK_STARTED_PROGRESS = 0.01;
 
 // Player-scheduled "use this artifact here" tasks get ids in this range — well
@@ -895,6 +895,7 @@ function applyAutoUseCycle() {
     if (!GAMESTATE.mods.auto_use_cycle) {
         return;
     }
+    GAMESTATE.auto_use_excluded_items = []; // the auto-use cycle never excludes
     const off_resets = Math.max(0, Math.floor(GAMESTATE.mods.auto_use_cycle_off_resets));
     if (GAMESTATE.auto_use_cycle_counter >= off_resets) {
         GAMESTATE.auto_use_items = true;
@@ -1207,10 +1208,13 @@ function resetArtifactTaskCycleState() {
 // energy resets to run it before moving on. Stored in serialization-friendly
 // shapes (priorities as entries, no Maps; specs use task_id) so it round-trips
 // through the save without special handling.
+export type AutoUseMode = "all" | "none" | "exclude";
+
 export interface QueueConfig {
     prios: [number, number[]][]; // automation_prios as [zone, task_id[]] entries
     artifact_tasks: ArtifactTaskSpec[];
-    auto_use_items: boolean;     // is this an item cycle?
+    auto_use_mode: AutoUseMode;  // all = auto-use everything, none = nothing, exclude = all but excluded_items
+    excluded_items: number[];    // ItemTypes skipped while auto-using in exclude mode
     repeat_count: number;        // consecutive energy resets to run before advancing
     name: string;                // optional player-set label
 }
@@ -1247,7 +1251,8 @@ function loadActiveQueue() {
     }
     GAMESTATE.automation_prios = new Map(clonePrioEntries(queue.prios));
     GAMESTATE.artifact_tasks = cloneArtifactSpecs(queue.artifact_tasks);
-    GAMESTATE.auto_use_items = queue.auto_use_items;
+    GAMESTATE.auto_use_items = queue.auto_use_mode != "none";
+    GAMESTATE.auto_use_excluded_items = queue.auto_use_mode == "exclude" ? [...queue.excluded_items] : [];
 }
 
 // Keep the active queue's stored snapshot in sync with live edits (right-click
@@ -1266,7 +1271,8 @@ function seedQueueConfigsIfEmpty() {
     GAMESTATE.queue_configs = [{
         prios: clonePrioEntries(Array.from(GAMESTATE.automation_prios.entries()) as [number, number[]][]),
         artifact_tasks: cloneArtifactSpecs(GAMESTATE.artifact_tasks),
-        auto_use_items: GAMESTATE.auto_use_items,
+        auto_use_mode: GAMESTATE.auto_use_items ? "all" : "none",
+        excluded_items: [],
         repeat_count: 1,
         name: "",
     }];
@@ -1363,7 +1369,8 @@ export function addQueue(): number {
     GAMESTATE.queue_configs.push({
         prios: clonePrioEntries(Array.from(GAMESTATE.automation_prios.entries()) as [number, number[]][]),
         artifact_tasks: cloneArtifactSpecs(GAMESTATE.artifact_tasks),
-        auto_use_items: GAMESTATE.auto_use_items,
+        auto_use_mode: GAMESTATE.auto_use_items ? "all" : "none",
+        excluded_items: [],
         repeat_count: 1,
         name: "",
     });
@@ -1398,16 +1405,46 @@ export function setQueueName(index: number, name: string) {
     saveGame();
 }
 
-export function setQueueItemCycle(index: number, value: boolean) {
+// Apply a queue's auto-use config to the live state if it's the running queue.
+function syncQueueAutoUseIfActive(index: number) {
+    const queue = GAMESTATE.queue_configs[index];
+    if (queue && GAMESTATE.mods.queue_cycle && index == GAMESTATE.active_queue_index) {
+        GAMESTATE.auto_use_items = queue.auto_use_mode != "none";
+        GAMESTATE.auto_use_excluded_items = queue.auto_use_mode == "exclude" ? [...queue.excluded_items] : [];
+    }
+}
+
+export function setQueueAutoUseMode(index: number, mode: AutoUseMode) {
     const queue = GAMESTATE.queue_configs[index];
     if (!queue) {
         return;
     }
-    queue.auto_use_items = value;
-    // If editing the running queue, take effect now.
-    if (GAMESTATE.mods.queue_cycle && index == GAMESTATE.active_queue_index) {
-        GAMESTATE.auto_use_items = value;
+    queue.auto_use_mode = mode;
+    syncQueueAutoUseIfActive(index);
+    saveGame();
+}
+
+export function getQueueExcludedItems(index: number): number[] {
+    return GAMESTATE.queue_configs[index]?.excluded_items ?? [];
+}
+
+export function addQueueExcludedItem(index: number, item: ItemType) {
+    const queue = GAMESTATE.queue_configs[index];
+    if (!queue || queue.excluded_items.includes(item)) {
+        return;
     }
+    queue.excluded_items.push(item);
+    syncQueueAutoUseIfActive(index);
+    saveGame();
+}
+
+export function removeQueueExcludedItem(index: number, item: ItemType) {
+    const queue = GAMESTATE.queue_configs[index];
+    if (!queue) {
+        return;
+    }
+    queue.excluded_items = queue.excluded_items.filter(i => i != item);
+    syncQueueAutoUseIfActive(index);
     saveGame();
 }
 
@@ -1500,6 +1537,9 @@ function autoUseItems() {
     for (const [key, value] of GAMESTATE.items) {
         if (ARTIFACTS.includes(key)) {
             continue;
+        }
+        if (GAMESTATE.auto_use_excluded_items.includes(key)) {
+            continue; // saved for a later (non-excluding) queue
         }
 
         if (value > 0) {
@@ -2071,7 +2111,12 @@ export function doPrestige() {
     GAMESTATE.power = 0;
     GAMESTATE.attunement = 0;
     GAMESTATE.prestige_available = false;
-    GAMESTATE.auto_use_items = false;
+    // Queue cycling owns auto-use during its runs (set by the restart above);
+    // otherwise prestige turns auto-use off.
+    if (!GAMESTATE.mods.queue_cycle) {
+        GAMESTATE.auto_use_items = false;
+        GAMESTATE.auto_use_excluded_items = [];
+    }
     GAMESTATE.unlocked_new_prestige_this_prestige = false;
 
     // Re-apply mods after the perk wipe so force_automation re-grants the
@@ -2214,6 +2259,19 @@ function loadGameFromData(data: any) {
     // We didn't use to track this, so let's get as close as we can
     if (GAMESTATE.highest_prestige_zone == 0 && GAMESTATE.prestige_count > 0) {
         GAMESTATE.highest_prestige_zone = GAMESTATE.highest_zone_ever;
+    }
+
+    // Migrate queues saved before the three-way auto-use mode: the old boolean
+    // auto_use_items maps to "all"/"none", with no exclusions.
+    for (const queue of GAMESTATE.queue_configs) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const legacy = queue as any;
+        if (legacy.auto_use_mode == null) {
+            legacy.auto_use_mode = legacy.auto_use_items ? "all" : "none";
+        }
+        if (!Array.isArray(queue.excluded_items)) {
+            queue.excluded_items = [];
+        }
     }
 
     // Merge mods over defaults so saves from before a given mod existed (or
@@ -2370,6 +2428,7 @@ export class Gamestate {
     automation_end = 99;
     automation_skip_blocked = false;
     auto_use_items = false;
+    auto_use_excluded_items: number[] = []; // ItemTypes the active queue excludes from auto-use
     undo_item: [ItemType, amount: number] = [ItemType.Count, 0];
     manual_tooltips = false;
 
@@ -2650,7 +2709,11 @@ export function updateGamestate() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).removeQueue = (index: number) => { removeQueue(index); RENDERING.createTasks(); return { success: true }; };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-(window as any).setQueueItemCycle = (index: number, value: boolean) => { setQueueItemCycle(index, !!value); return { success: true }; };
+(window as any).setQueueAutoUseMode = (index: number, mode: AutoUseMode) => { setQueueAutoUseMode(index, mode); return { success: true }; };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).addQueueExcludedItem = (index: number, item: number) => { addQueueExcludedItem(index, item as ItemType); RENDERING.createTasks(); return { success: true }; };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).removeQueueExcludedItem = (index: number, item: number) => { removeQueueExcludedItem(index, item as ItemType); RENDERING.createTasks(); return { success: true }; };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).setQueueRepeatCount = (index: number, value: number) => { setQueueRepeatCount(index, value); return { success: true }; };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
