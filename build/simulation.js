@@ -1972,6 +1972,7 @@ export class Gamestate {
     mods = defaultMods();
     mods_granted_amulet = false;
     mods_automation_panel_collapsed = true; // Advanced Automation panel UI state
+    queue_list_collapsed = false; // Queue Cycle list UI state
     start() {
         // In managed mode the host owns persistence — skip reading from
         // localStorage and go straight to a fresh initialize.

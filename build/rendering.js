@@ -2020,21 +2020,6 @@ function setupAutomationControls() {
         const tooltip = "The Zone you specify here will be used by the 'To Zone' automation";
         return tooltip;
     });
-    const editing = isEditMode();
-    const edit_priorities_button = createChildElement(automation_div, "button");
-    edit_priorities_button.className = "edit-priorities-button" + (editing ? " on" : "");
-    edit_priorities_button.textContent = editing ? "Done Editing Priorities" : "Edit Priorities";
-    edit_priorities_button.addEventListener("click", () => {
-        if (editing) {
-            exitEditMode();
-        }
-        else if (!enterEditMode()) {
-            flashMessage("Stop the current task before editing priorities.");
-            return;
-        }
-        refreshAfterEditChange();
-    });
-    setupTooltip(edit_priorities_button, () => editing ? "Done editing" : "Edit priorities", () => "Browse the zones you've reached and set Task automation priorities for each, without anything running. Requires no Task to be in progress.");
     setupAdvancedAutomationControls(automation_div);
 }
 // Game Mods — extra automation toggles, shown as a collapsible panel under
@@ -2079,6 +2064,7 @@ function setupAdvancedAutomationControls(parent) {
         content.style.display = GAMESTATE.mods_automation_panel_collapsed ? "none" : "flex";
         toggle_icon.textContent = GAMESTATE.mods_automation_panel_collapsed ? "▶" : "▼";
     });
+    setupEditPrioritiesControl(content);
     for (const toggle of ADVANCED_AUTOMATION_TOGGLES) {
         const button = createChildElement(content, "button");
         function refresh() {
@@ -2094,6 +2080,25 @@ function setupAdvancedAutomationControls(parent) {
     }
     setupAutoUseCycleControl(content);
     setupQueueCycleControl(content);
+}
+// Edit Priorities: enters/leaves the zone-navigable priority edit mode. Styled
+// like the other Advanced Automation buttons.
+function setupEditPrioritiesControl(content) {
+    const editing = isEditMode();
+    const button = createChildElement(content, "button");
+    button.className = editing ? "on" : "off";
+    button.textContent = editing ? "Done Editing Priorities" : "Edit Priorities";
+    button.addEventListener("click", () => {
+        if (editing) {
+            exitEditMode();
+        }
+        else if (!enterEditMode()) {
+            flashMessage("Stop the current task before editing priorities.");
+            return;
+        }
+        refreshAfterEditChange();
+    });
+    setupTooltip(button, () => editing ? "Done editing" : "Edit priorities", () => "Browse the zones you've reached and set Task automation priorities for each, without anything running. Requires no Task to be in progress.");
 }
 // Auto Use Cycle (Game Mod): a toggle plus a numeric input for how many Energy
 // Resets run with Auto Use Items off before one runs with it on. Lives in the
@@ -2141,6 +2146,29 @@ function setupQueueCycleControl(content) {
     const configs = getQueueConfigs();
     const active = getActiveQueueIndex();
     const runs_done = getQueueRunsOnCurrent();
+    // Active-queue summary, shown on the (collapsible) list header so it's
+    // visible even when collapsed.
+    const active_queue = configs[active];
+    const active_progress = active_queue && active_queue.repeat_count > 1
+        ? ` (run ${Math.min(runs_done + 1, active_queue.repeat_count)}/${active_queue.repeat_count})` : "";
+    const summary = configs.length > 0 ? `Queue ${active + 1}${active_progress}` : "no queues";
+    const collapsed = GAMESTATE.queue_list_collapsed;
+    const list_header = createChildElement(content, "div");
+    list_header.className = "queue-list-header";
+    const list_icon = createChildElement(list_header, "span");
+    list_icon.className = "queue-list-icon";
+    list_icon.textContent = collapsed ? "▶" : "▼";
+    const list_title = createChildElement(list_header, "span");
+    list_title.className = "queue-list-title";
+    list_title.textContent = `Queues — ${summary}`;
+    list_header.addEventListener("click", () => {
+        GAMESTATE.queue_list_collapsed = !GAMESTATE.queue_list_collapsed;
+        saveGame();
+        setupControls();
+    });
+    if (collapsed) {
+        return;
+    }
     if (configs.length >= 2) {
         const advance_button = createChildElement(content, "button");
         advance_button.className = "queue-config-add";
@@ -2162,7 +2190,8 @@ function setupQueueCycleControl(content) {
         const progress = is_active && queue.repeat_count > 1 ? ` (run ${Math.min(runs_done + 1, queue.repeat_count)}/${queue.repeat_count})` : "";
         label.textContent = `${is_active ? "▶ " : ""}Queue ${i + 1}${progress}`;
         const edit_button = createChildElement(row, "button");
-        edit_button.className = "queue-config-btn" + (i === active ? " on" : "");
+        // Green only while this queue is actually being edited.
+        edit_button.className = "queue-config-btn" + (isEditMode() && is_active ? " on" : "");
         edit_button.textContent = "Edit";
         edit_button.addEventListener("click", () => {
             if (!isEditMode() && !enterEditMode()) {

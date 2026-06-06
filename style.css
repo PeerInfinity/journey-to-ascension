@@ -1036,7 +1036,6 @@ footer {
     height: 26px;
     padding: 0 8px;
     border-radius: var(--default-border-radius);
-    background: var(--element-background-color);
     cursor: pointer;
 }
 
@@ -1046,6 +1045,20 @@ footer {
 
 /* MARK: Queue Cycle Config
 */
+
+.queue-list-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 2px 4px;
+    font-size: 0.85em;
+    font-weight: bold;
+}
+
+.queue-list-icon {
+    font-size: 0.75em;
+}
 
 .queue-config-row {
     display: flex;
@@ -1060,12 +1073,11 @@ footer {
     font-size: 0.85em;
 }
 
-.queue-config-btn {
+/* Keep the per-queue controls inline (override the panel's full-width buttons). */
+#controls .advanced-automation-content button.queue-config-btn {
+    width: auto;
     height: 24px;
     padding: 0 6px;
-    border-radius: var(--default-border-radius);
-    background: var(--element-background-color);
-    cursor: pointer;
     font-size: 0.8em;
 }
 
@@ -1082,11 +1094,6 @@ footer {
 
 .queue-config-add {
     margin-top: 6px;
-    padding: 4px 8px;
-    border-radius: var(--default-border-radius);
-    background: var(--element-background-color);
-    cursor: pointer;
-    font-size: 0.85em;
 }
 
 /* MARK: Priority Edit Mode
@@ -1130,19 +1137,6 @@ footer {
     background: rgba(255, 255, 255, 0.2);
     color: #fff;
     cursor: pointer;
-}
-
-.edit-priorities-button {
-    margin-top: 6px;
-    padding: 4px 8px;
-    border-radius: var(--default-border-radius);
-    background: var(--element-background-color);
-    cursor: pointer;
-}
-
-.edit-priorities-button.on {
-    background-color: #8c386d;
-    color: #fff;
 }
 
 .queue-config-row.active {

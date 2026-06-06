@@ -201,6 +201,7 @@ export declare class Gamestate {
     mods: GameMods;
     mods_granted_amulet: boolean;
     mods_automation_panel_collapsed: boolean;
+    queue_list_collapsed: boolean;
     start(): void;
     initialize(): void;
     popRenderEvents(): RenderEvent[];

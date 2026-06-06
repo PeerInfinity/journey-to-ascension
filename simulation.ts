@@ -2412,6 +2412,7 @@ export class Gamestate {
     mods: GameMods = defaultMods();
     mods_granted_amulet = false;
     mods_automation_panel_collapsed = true; // Advanced Automation panel UI state
+    queue_list_collapsed = false;            // Queue Cycle list UI state
 
     public start() {
         // In managed mode the host owns persistence — skip reading from
