@@ -6,7 +6,7 @@ import { SkillType } from "./skills.js";
 import { PrestigeRepeatableType, PrestigeUnlockType, PrestigeLayer } from "./prestige_upgrades.js";
 export declare function isManagedMode(): boolean;
 export declare const BOSS_MAX_ENERGY_DISPARITY = 5;
-export declare const SAVE_VERSION = "1.6.0";
+export declare const SAVE_VERSION = "1.7.0";
 export declare class Skill {
     type: SkillType;
     level: number;
@@ -55,6 +55,7 @@ export interface QueueConfig {
     artifact_tasks: ArtifactTaskSpec[];
     auto_use_items: boolean;
     repeat_count: number;
+    name: string;
 }
 export declare function getQueueConfigs(): QueueConfig[];
 export declare function getActiveQueueIndex(): number;
@@ -63,6 +64,7 @@ export declare function advanceQueueCycle(): void;
 export declare function getQueueRunsOnCurrent(): number;
 export declare function addQueue(): number;
 export declare function removeQueue(index: number): void;
+export declare function setQueueName(index: number, name: string): void;
 export declare function setQueueItemCycle(index: number, value: boolean): void;
 export declare function setQueueRepeatCount(index: number, value: number): void;
 export declare function moveQueue(index: number, delta: number): void;

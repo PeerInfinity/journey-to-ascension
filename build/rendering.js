@@ -1,5 +1,5 @@
 import { Task, TaskDefinition, ZONES, TaskType, PERKS_BY_ZONE, ITEMS_BY_ZONE } from "./zones.js";
-import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, BOSS_MAX_ENERGY_DISPARITY, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId, getQueueConfigs, getActiveQueueIndex, getQueueRunsOnCurrent, advanceQueueCycle, addQueue, removeQueue, setQueueItemCycle, setQueueRepeatCount, moveQueue, setActiveQueue, isEditMode, enterEditMode, exitEditMode, setEditZone, getEditMaxZone } from "./simulation.js";
+import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, BOSS_MAX_ENERGY_DISPARITY, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId, getQueueConfigs, getActiveQueueIndex, getQueueRunsOnCurrent, advanceQueueCycle, addQueue, removeQueue, setQueueItemCycle, setQueueRepeatCount, setQueueName, moveQueue, setActiveQueue, isEditMode, enterEditMode, exitEditMode, setEditZone, getEditMaxZone } from "./simulation.js";
 import { GAMESTATE, RENDERING, resetSave } from "./game.js";
 import { ItemType, ItemDefinition, ITEMS, HASTE_MULT, ARTIFACTS, MAGIC_RING_MULT, BOTTLED_LIGHTNING_MULT } from "./items.js";
 import { PerkDefinition, PerkType, PERKS, getPerkNameWithEmoji } from "./perks.js";
@@ -2151,7 +2151,8 @@ function setupQueueCycleControl(content) {
     const active_queue = configs[active];
     const active_progress = active_queue && active_queue.repeat_count > 1
         ? ` (run ${Math.min(runs_done + 1, active_queue.repeat_count)}/${active_queue.repeat_count})` : "";
-    const summary = configs.length > 0 ? `Queue ${active + 1}${active_progress}` : "no queues";
+    const active_name = active_queue && active_queue.name ? `: ${active_queue.name}` : "";
+    const summary = configs.length > 0 ? `Queue ${active + 1}${active_name}${active_progress}` : "no queues";
     const collapsed = GAMESTATE.queue_list_collapsed;
     const list_header = createChildElement(content, "div");
     list_header.className = "queue-list-header";
@@ -2182,13 +2183,33 @@ function setupQueueCycleControl(content) {
             continue;
         }
         const is_active = i === active;
-        const row = createChildElement(content, "div");
-        row.className = "queue-config-row" + (is_active ? " active" : "");
-        const label = createChildElement(row, "span");
+        const entry = createChildElement(content, "div");
+        entry.className = "queue-config-entry" + (is_active ? " active" : "");
+        // Row 1: "Queue N (run k/M)" label + optional name input filling the rest.
+        const top_row = createChildElement(entry, "div");
+        top_row.className = "queue-config-top";
+        const label = createChildElement(top_row, "span");
         label.className = "queue-config-label";
-        // Active row shows which run of its repeat-count it's on.
         const progress = is_active && queue.repeat_count > 1 ? ` (run ${Math.min(runs_done + 1, queue.repeat_count)}/${queue.repeat_count})` : "";
         label.textContent = `${is_active ? "▶ " : ""}Queue ${i + 1}${progress}`;
+        const name_input = createChildElement(top_row, "input");
+        name_input.type = "text";
+        name_input.className = "queue-name-input";
+        name_input.placeholder = "label (optional)";
+        name_input.value = queue.name ?? "";
+        name_input.addEventListener("change", () => {
+            setQueueName(i, name_input.value);
+            // Refresh the collapsed-header summary for the active queue without
+            // a full rebuild (which would swallow an adjacent click).
+            if (is_active) {
+                const np = queue.repeat_count > 1 ? ` (run ${Math.min(runs_done + 1, queue.repeat_count)}/${queue.repeat_count})` : "";
+                const nn = name_input.value ? `: ${name_input.value}` : "";
+                list_title.textContent = `Queues — Queue ${i + 1}${nn}${np}`;
+            }
+        });
+        // Row 2: the queue's controls.
+        const row = createChildElement(entry, "div");
+        row.className = "queue-config-row";
         const edit_button = createChildElement(row, "button");
         // Green only while this queue is actually being edited.
         edit_button.className = "queue-config-btn" + (isEditMode() && is_active ? " on" : "");

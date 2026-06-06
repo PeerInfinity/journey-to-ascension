@@ -34,7 +34,7 @@ const ZONE_SPEEDUP_BASE = 1.05;
 export const BOSS_MAX_ENERGY_DISPARITY = 5;
 const STARTING_ENERGY = 100;
 const DEFAULT_TICK_RATE = 66.6;
-export const SAVE_VERSION = "1.6.0";
+export const SAVE_VERSION = "1.7.0";
 const TASK_STARTED_PROGRESS = 0.01;
 // Player-scheduled "use this artifact here" tasks get ids in this range — well
 // above zone task ids and the host's synthetic exit tasks (>= 10000) — so they
@@ -1031,6 +1031,7 @@ function seedQueueConfigsIfEmpty() {
             artifact_tasks: cloneArtifactSpecs(GAMESTATE.artifact_tasks),
             auto_use_items: GAMESTATE.auto_use_items,
             repeat_count: 1,
+            name: "",
         }];
     GAMESTATE.active_queue_index = 0;
     GAMESTATE.queue_runs_on_current = 0;
@@ -1116,6 +1117,7 @@ export function addQueue() {
         artifact_tasks: cloneArtifactSpecs(GAMESTATE.artifact_tasks),
         auto_use_items: GAMESTATE.auto_use_items,
         repeat_count: 1,
+        name: "",
     });
     saveGame();
     return GAMESTATE.queue_configs.length - 1;
@@ -1136,6 +1138,14 @@ export function removeQueue(index) {
     else if (GAMESTATE.mods.queue_cycle && index == GAMESTATE.active_queue_index) {
         loadActiveQueue();
     }
+    saveGame();
+}
+export function setQueueName(index, name) {
+    const queue = GAMESTATE.queue_configs[index];
+    if (!queue) {
+        return;
+    }
+    queue.name = name;
     saveGame();
 }
 export function setQueueItemCycle(index, value) {
@@ -2171,6 +2181,8 @@ window.removeQueue = (index) => { removeQueue(index); RENDERING.createTasks(); r
 window.setQueueItemCycle = (index, value) => { setQueueItemCycle(index, !!value); return { success: true }; };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 window.setQueueRepeatCount = (index, value) => { setQueueRepeatCount(index, value); return { success: true }; };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.setQueueName = (index, name) => { setQueueName(index, String(name)); return { success: true }; };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 window.moveQueue = (index, delta) => { moveQueue(index, delta); RENDERING.createTasks(); return { success: true }; };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

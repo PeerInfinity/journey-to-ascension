@@ -37,7 +37,7 @@ const ZONE_SPEEDUP_BASE = 1.05;
 export const BOSS_MAX_ENERGY_DISPARITY = 5;
 const STARTING_ENERGY = 100;
 const DEFAULT_TICK_RATE = 66.6;
-export const SAVE_VERSION = "1.6.0";
+export const SAVE_VERSION = "1.7.0";
 const TASK_STARTED_PROGRESS = 0.01;
 
 // Player-scheduled "use this artifact here" tasks get ids in this range — well
@@ -1212,6 +1212,7 @@ export interface QueueConfig {
     artifact_tasks: ArtifactTaskSpec[];
     auto_use_items: boolean;     // is this an item cycle?
     repeat_count: number;        // consecutive energy resets to run before advancing
+    name: string;                // optional player-set label
 }
 
 function cloneArtifactSpecs(specs: ArtifactTaskSpec[]): ArtifactTaskSpec[] {
@@ -1267,6 +1268,7 @@ function seedQueueConfigsIfEmpty() {
         artifact_tasks: cloneArtifactSpecs(GAMESTATE.artifact_tasks),
         auto_use_items: GAMESTATE.auto_use_items,
         repeat_count: 1,
+        name: "",
     }];
     GAMESTATE.active_queue_index = 0;
     GAMESTATE.queue_runs_on_current = 0;
@@ -1363,6 +1365,7 @@ export function addQueue(): number {
         artifact_tasks: cloneArtifactSpecs(GAMESTATE.artifact_tasks),
         auto_use_items: GAMESTATE.auto_use_items,
         repeat_count: 1,
+        name: "",
     });
     saveGame();
     return GAMESTATE.queue_configs.length - 1;
@@ -1383,6 +1386,15 @@ export function removeQueue(index: number) {
     } else if (GAMESTATE.mods.queue_cycle && index == GAMESTATE.active_queue_index) {
         loadActiveQueue();
     }
+    saveGame();
+}
+
+export function setQueueName(index: number, name: string) {
+    const queue = GAMESTATE.queue_configs[index];
+    if (!queue) {
+        return;
+    }
+    queue.name = name;
     saveGame();
 }
 
@@ -2641,6 +2653,8 @@ export function updateGamestate() {
 (window as any).setQueueItemCycle = (index: number, value: boolean) => { setQueueItemCycle(index, !!value); return { success: true }; };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).setQueueRepeatCount = (index: number, value: number) => { setQueueRepeatCount(index, value); return { success: true }; };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).setQueueName = (index: number, name: string) => { setQueueName(index, String(name)); return { success: true }; };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).moveQueue = (index: number, delta: number) => { moveQueue(index, delta); RENDERING.createTasks(); return { success: true }; };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

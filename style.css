@@ -1060,17 +1060,38 @@ footer {
     font-size: 0.75em;
 }
 
+.queue-config-entry {
+    margin: 6px 0;
+}
+
+.queue-config-top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .queue-config-row {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: 4px;
-    margin: 4px 0;
+    margin-top: 3px;
 }
 
 .queue-config-label {
-    min-width: 70px;
+    flex-shrink: 0;
     font-size: 0.85em;
+    font-weight: bold;
+}
+
+.queue-name-input {
+    flex: 1;
+    min-width: 0;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: var(--default-border-radius);
+    border: none;
+    font-size: 0.8em;
 }
 
 /* Keep the per-queue controls inline (override the panel's full-width buttons). */
@@ -1139,7 +1160,7 @@ footer {
     cursor: pointer;
 }
 
-.queue-config-row.active {
+.queue-config-entry.active {
     border-left: 3px solid #8c386d;
     padding-left: 4px;
 }
