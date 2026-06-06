@@ -1222,9 +1222,12 @@ function updateItems() {
 
     for (const [item, button] of RENDERING.item_elements) {
         const item_count = GAMESTATE.items.get(item);
-        button.disabled = item_count == 0;
+        // While picking exclusions, keep (non-artifact) items clickable even at
+        // zero count, so you can exclude items you don't currently hold.
+        const pickable = RENDERING.exclude_pick_queue != null && !ARTIFACTS.includes(item);
+        button.disabled = item_count == 0 && !pickable;
         button.classList.toggle("disabled", button.disabled);
-        
+
         const count_text = button.querySelector<HTMLElement>(".item-count") as HTMLElement;
         count_text.textContent = `${item_count}`;
     }
