@@ -1014,3 +1014,32 @@ footer {
     padding: 6px 8px;
     font-size: 0.85em;
 }
+
+/* MARK: Artifact Task Sections
+*/
+
+.task-section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 0 5px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--element-background-color);
+}
+
+.task-section-title {
+    font-weight: bold;
+    opacity: 0.85;
+}
+
+.artifact-task-control {
+    height: 26px;
+    padding: 0 8px;
+    border-radius: var(--default-border-radius);
+    background: var(--element-background-color);
+    cursor: pointer;
+}
+
+.artifact-task-control.on {
+    background-color: rgb(49, 221, 72);
+}

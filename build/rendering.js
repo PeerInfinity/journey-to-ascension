@@ -1,5 +1,5 @@
 import { Task, TaskDefinition, ZONES, TaskType, PERKS_BY_ZONE, ITEMS_BY_ZONE } from "./zones.js";
-import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, BOSS_MAX_ENERGY_DISPARITY, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled } from "./simulation.js";
+import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, BOSS_MAX_ENERGY_DISPARITY, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId } from "./simulation.js";
 import { GAMESTATE, RENDERING, resetSave } from "./game.js";
 import { ItemType, ItemDefinition, ITEMS, HASTE_MULT, ARTIFACTS, MAGIC_RING_MULT, BOTTLED_LIGHTNING_MULT } from "./items.js";
 import { PerkDefinition, PerkType, PERKS, getPerkNameWithEmoji } from "./perks.js";
@@ -301,6 +301,38 @@ function calcLevelsGained(type, xp_gained) {
 }
 // MARK: Tasks
 const TASK_TYPE_NAMES = ["Normal", "Travel", "Mandatory", "Prestige", "Boss"];
+// A plain section header inside the task list (e.g. "Procgen Exits").
+function createTaskSectionHeader(parent, title) {
+    const header = createChildElement(parent, "div");
+    header.className = "task-section-header";
+    const label = createChildElement(header, "span");
+    label.className = "task-section-title";
+    label.textContent = title;
+    return header;
+}
+// The "Artifacts" header, with Add/Remove pick-mode buttons for scheduling
+// artifact-use tasks.
+function createArtifactSectionHeader(parent, rendering) {
+    const header = createTaskSectionHeader(parent, "Artifacts");
+    const add_button = createChildElement(header, "button");
+    const adding = rendering.artifact_task_mode == "add";
+    add_button.className = "artifact-task-control" + (adding ? " on" : "");
+    add_button.textContent = adding ? "Pick an artifact…" : "Add";
+    add_button.addEventListener("click", () => {
+        rendering.artifact_task_mode = adding ? null : "add";
+        rendering.createTasks();
+    });
+    setupTooltip(add_button, () => "Add Artifact Task", () => "Click here, then click an artifact in your inventory to schedule using it as a task in this zone. Click Add again to cancel.");
+    const remove_button = createChildElement(header, "button");
+    const removing = rendering.artifact_task_mode == "remove";
+    remove_button.className = "artifact-task-control" + (removing ? " on" : "");
+    remove_button.textContent = removing ? "Pick a task…" : "Remove";
+    remove_button.addEventListener("click", () => {
+        rendering.artifact_task_mode = removing ? null : "remove";
+        rendering.createTasks();
+    });
+    setupTooltip(remove_button, () => "Remove Artifact Task", () => "Click here, then click a scheduled artifact task to remove it. Click Remove again to cancel.");
+}
 function createTaskDiv(task, tasks_div, rendering) {
     const task_div = document.createElement("div");
     task_div.className = "task";
@@ -310,6 +342,12 @@ function createTaskDiv(task, tasks_div, rendering) {
     const task_button = document.createElement("button");
     task_button.className = "task-button";
     task_button.addEventListener("click", () => {
+        // In "remove" pick-mode, clicking an artifact task unschedules it.
+        if (rendering.artifact_task_mode == "remove" && isArtifactTaskId(task.task_definition.id)) {
+            removeArtifactTask(task.task_definition.id);
+            rendering.createTasks();
+            return;
+        }
         // We do this just via classes rather than the disabled propery
         // As Firefox would also disable right-clicking otherwise
         if (!task_button.classList.contains("disabled")) {
@@ -797,7 +835,16 @@ function createItemDiv(item, items_div) {
     button.innerHTML = `<span class="text">${item_definition.icon}</span>`;
     const count_text = createChildElement(button, "p");
     count_text.className = "item-count";
-    button.addEventListener("click", () => { clickItem(item, false); });
+    button.addEventListener("click", () => {
+        // In "add" pick-mode, clicking an artifact schedules it as a task here
+        // instead of using it.
+        if (RENDERING.artifact_task_mode == "add" && ARTIFACTS.includes(item)) {
+            addArtifactTask(item);
+            RENDERING.createTasks();
+            return;
+        }
+        clickItem(item, false);
+    });
     button.addEventListener("contextmenu", (e) => { e.preventDefault(); clickItem(item, true); });
     setupTooltipStaticHeader(button, `${item_definition.name}`, () => `${item_definition.getTooltip()}`);
     RENDERING.item_elements.set(item, button);
@@ -1950,6 +1997,11 @@ const ADVANCED_AUTOMATION_TOGGLES = [
         tooltip: "Even on cycles where Auto Use Items is off, automatically use Items you can spend without reducing how many you keep on the next Energy Reset (the surplus left by the keep rounding). Each Item is used once the last Task rep that could grant it this cycle has finished, so its kept count is unaffected. Artifacts (such as Scrolls of Haste) are excluded.",
         mod: "auto_use_free_items",
     },
+    {
+        label: "Artifact Tasks: Item Cycles Only",
+        tooltip: "Only run scheduled artifact tasks (the Artifacts section of the task list) on item cycles — i.e. while Auto Use Items is enabled. On banking cycles they're skipped, so artifacts are saved instead of spent.",
+        mod: "artifact_tasks_item_cycle_only",
+    },
 ];
 function setupAdvancedAutomationControls(parent) {
     const panel = createChildElement(parent, "div");
@@ -2282,6 +2334,9 @@ export class Rendering {
     item_order = [];
     artifact_order = [];
     viewing_last_reset = false;
+    // Pick-mode for scheduling artifact tasks: "add" intercepts the next
+    // inventory-artifact click, "remove" intercepts the next artifact-task click.
+    artifact_task_mode = null;
     createTasks() {
         const tasks_div = document.getElementById("tasks");
         if (!tasks_div) {
@@ -2289,8 +2344,39 @@ export class Rendering {
             return;
         }
         tasks_div.innerHTML = "";
+        // Split into the zone's own tasks, host-injected procgen exit tasks
+        // (ids >= 10000, managed mode only), and player artifact tasks.
+        const normal_tasks = [];
+        const exit_tasks = [];
+        const artifact_tasks = [];
         for (const task of GAMESTATE.tasks) {
+            const id = task.task_definition.id;
+            if (isArtifactTaskId(id)) {
+                artifact_tasks.push(task);
+            }
+            else if (id >= 10000) {
+                exit_tasks.push(task);
+            }
+            else {
+                normal_tasks.push(task);
+            }
+        }
+        for (const task of normal_tasks) {
             createTaskDiv(task, tasks_div, this);
+        }
+        if (exit_tasks.length > 0) {
+            createTaskSectionHeader(tasks_div, "Procgen Exits");
+            for (const task of exit_tasks) {
+                createTaskDiv(task, tasks_div, this);
+            }
+        }
+        // Artifact-task scheduling is an automation feature; show it once the
+        // Amulet (which gates automation) is held.
+        if (hasPerk(PerkType.Amulet)) {
+            createArtifactSectionHeader(tasks_div, this);
+            for (const task of artifact_tasks) {
+                createTaskDiv(task, tasks_div, this);
+            }
         }
     }
     // Append the DOM for a single task without rebuilding the rest.

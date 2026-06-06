@@ -1110,7 +1110,7 @@ export interface ArtifactTaskSpec {
     done: boolean;     // already used this cycle (reset on any reset)
 }
 
-function isArtifactTaskId(id: number): boolean {
+export function isArtifactTaskId(id: number): boolean {
     return id >= ARTIFACT_TASK_ID_BASE;
 }
 

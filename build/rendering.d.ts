@@ -50,6 +50,7 @@ export declare class Rendering {
     item_order: ItemType[];
     artifact_order: ItemType[];
     viewing_last_reset: boolean;
+    artifact_task_mode: "add" | "remove" | null;
     createTasks(): void;
     appendTask(task: Task): void;
     constructor();

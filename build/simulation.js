@@ -903,7 +903,7 @@ function maybeUseRoundingErrorItem(item) {
         disableItemUndo();
     }
 }
-function isArtifactTaskId(id) {
+export function isArtifactTaskId(id) {
     return id >= ARTIFACT_TASK_ID_BASE;
 }
 function getArtifactTaskSpec(id) {

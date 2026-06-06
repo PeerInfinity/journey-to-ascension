@@ -46,6 +46,7 @@ export interface ArtifactTaskSpec {
     zone_id: number;
     done: boolean;
 }
+export declare function isArtifactTaskId(id: number): boolean;
 export declare function addArtifactTask(item: ItemType): number;
 export declare function removeArtifactTask(task_id: number): void;
 export declare function getArtifactTasks(): ArtifactTaskSpec[];
