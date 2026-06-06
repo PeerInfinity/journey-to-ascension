@@ -6,7 +6,7 @@ import { SkillType } from "./skills.js";
 import { PrestigeRepeatableType, PrestigeUnlockType, PrestigeLayer } from "./prestige_upgrades.js";
 export declare function isManagedMode(): boolean;
 export declare const BOSS_MAX_ENERGY_DISPARITY = 5;
-export declare const SAVE_VERSION = "1.5.0";
+export declare const SAVE_VERSION = "1.6.0";
 export declare class Skill {
     type: SkillType;
     level: number;
@@ -50,6 +50,19 @@ export declare function isArtifactTaskId(id: number): boolean;
 export declare function addArtifactTask(item: ItemType): number;
 export declare function removeArtifactTask(task_id: number): void;
 export declare function getArtifactTasks(): ArtifactTaskSpec[];
+export interface QueueConfig {
+    prios: [number, number[]][];
+    artifact_tasks: ArtifactTaskSpec[];
+    auto_use_items: boolean;
+    repeat_count: number;
+}
+export declare function getQueueConfigs(): QueueConfig[];
+export declare function getActiveQueueIndex(): number;
+export declare function addQueue(): number;
+export declare function removeQueue(index: number): void;
+export declare function setQueueItemCycle(index: number, value: boolean): void;
+export declare function setQueueRepeatCount(index: number, value: number): void;
+export declare function moveQueue(index: number, delta: number): void;
 export declare function undoItemUse(): void;
 type ItemAmount = [item: ItemType, amount: number];
 export declare function gatherItemBonuses(skill: SkillType): ItemAmount[];
@@ -110,6 +123,7 @@ export interface GameMods {
     auto_use_cycle_off_resets: number;
     auto_use_free_items: boolean;
     artifact_tasks_item_cycle_only: boolean;
+    queue_cycle: boolean;
 }
 export declare function defaultMods(): GameMods;
 export declare function getMods(): GameMods;
@@ -124,6 +138,9 @@ export declare class Gamestate {
     unlocked_tasks: number[];
     artifact_tasks: ArtifactTaskSpec[];
     next_artifact_task_id: number;
+    queue_configs: QueueConfig[];
+    active_queue_index: number;
+    queue_runs_on_current: number;
     current_zone: number;
     highest_zone: number;
     highest_zone_fully_completed: number;

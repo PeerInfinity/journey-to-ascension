@@ -37,7 +37,7 @@ const ZONE_SPEEDUP_BASE = 1.05;
 export const BOSS_MAX_ENERGY_DISPARITY = 5;
 const STARTING_ENERGY = 100;
 const DEFAULT_TICK_RATE = 66.6;
-export const SAVE_VERSION = "1.5.0";
+export const SAVE_VERSION = "1.6.0";
 const TASK_STARTED_PROGRESS = 0.01;
 
 // Player-scheduled "use this artifact here" tasks get ids in this range — well
@@ -912,13 +912,17 @@ export function doEnergyReset() {
     const resume_automation = GAMESTATE.mods.resume_automation_on_reset;
     const saved_automation_mode = GAMESTATE.automation_mode;
 
+    // Advance the per-reset cycle (queue swap or auto-use cycle) before
+    // doAnyReset rebuilds the zone, so the newly-active queue's priorities and
+    // artifact tasks are the ones injected.
+    applyResetCycle();
+
     doAnyReset(); // Gotta be after the current_zone check in calcEnergeticMemoryGain
 
     if (resume_automation) {
         GAMESTATE.automation_mode = saved_automation_mode;
     }
     GAMESTATE.energy_reset_count += 1;
-    applyAutoUseCycle();
     handleEnergyResetItemCounts();
     storeLoopStartNumbersForNextGameOver();
     skipFreeZones();
@@ -1163,6 +1167,7 @@ export function addArtifactTask(item: ItemType): number {
         GAMESTATE.tasks.push(makeArtifactTask(spec));
         updateEnabledTasks();
     }
+    syncActiveQueueIfCycling();
     saveGame();
     return spec.task_id;
 }
@@ -1177,6 +1182,7 @@ export function removeArtifactTask(task_id: number) {
             prios.splice(idx, 1);
         }
     }
+    syncActiveQueueIfCycling();
     saveGame();
 }
 
@@ -1189,6 +1195,199 @@ function resetArtifactTaskCycleState() {
     for (const spec of GAMESTATE.artifact_tasks) {
         spec.done = false;
     }
+}
+
+// MARK: Queue Cycling
+
+// A saved automation queue: a full plan (per-zone priorities + the artifact-use
+// tasks it schedules) plus whether it's an item cycle and how many consecutive
+// energy resets to run it before moving on. Stored in serialization-friendly
+// shapes (priorities as entries, no Maps; specs use task_id) so it round-trips
+// through the save without special handling.
+export interface QueueConfig {
+    prios: [number, number[]][]; // automation_prios as [zone, task_id[]] entries
+    artifact_tasks: ArtifactTaskSpec[];
+    auto_use_items: boolean;     // is this an item cycle?
+    repeat_count: number;        // consecutive energy resets to run before advancing
+}
+
+function cloneArtifactSpecs(specs: ArtifactTaskSpec[]): ArtifactTaskSpec[] {
+    return specs.map(s => ({ ...s }));
+}
+
+function clonePrioEntries(entries: [number, number[]][]): [number, number[]][] {
+    return entries.map(([zone, ids]) => [zone, [...ids]]);
+}
+
+function activeQueue(): QueueConfig | null {
+    return GAMESTATE.queue_configs[GAMESTATE.active_queue_index] ?? null;
+}
+
+// Copy the live working plan (priorities + artifact tasks) into the active
+// queue. auto_use_items / repeat_count are config, edited only via the UI, so
+// they're left alone here.
+function saveActiveQueue() {
+    const queue = activeQueue();
+    if (!queue) {
+        return;
+    }
+    queue.prios = clonePrioEntries(Array.from(GAMESTATE.automation_prios.entries()) as [number, number[]][]);
+    queue.artifact_tasks = cloneArtifactSpecs(GAMESTATE.artifact_tasks);
+}
+
+// Make the active queue's plan the live working state.
+function loadActiveQueue() {
+    const queue = activeQueue();
+    if (!queue) {
+        return;
+    }
+    GAMESTATE.automation_prios = new Map(clonePrioEntries(queue.prios));
+    GAMESTATE.artifact_tasks = cloneArtifactSpecs(queue.artifact_tasks);
+    GAMESTATE.auto_use_items = queue.auto_use_items;
+}
+
+// Keep the active queue's stored snapshot in sync with live edits (right-click
+// priorities, add/remove artifact tasks) so the UI and reloads stay correct.
+function syncActiveQueueIfCycling() {
+    if (GAMESTATE.mods.queue_cycle) {
+        saveActiveQueue();
+    }
+}
+
+// Seed an initial queue from the current plan the first time cycling is enabled.
+function seedQueueConfigsIfEmpty() {
+    if (GAMESTATE.queue_configs.length > 0) {
+        return;
+    }
+    GAMESTATE.queue_configs = [{
+        prios: clonePrioEntries(Array.from(GAMESTATE.automation_prios.entries()) as [number, number[]][]),
+        artifact_tasks: cloneArtifactSpecs(GAMESTATE.artifact_tasks),
+        auto_use_items: GAMESTATE.auto_use_items,
+        repeat_count: 1,
+    }];
+    GAMESTATE.active_queue_index = 0;
+    GAMESTATE.queue_runs_on_current = 0;
+}
+
+// Advance the queue cycle for the upcoming run: save the finishing run's edits,
+// step to the next queue once the current one's repeat_count is met, then make
+// the (now-)active queue the live plan. Runs once per energy reset, before the
+// per-reset task rebuild so the new queue's artifact tasks get injected.
+function applyQueueCycle() {
+    if (GAMESTATE.queue_configs.length == 0) {
+        return;
+    }
+    saveActiveQueue();
+
+    GAMESTATE.queue_runs_on_current += 1;
+    const current = activeQueue();
+    const repeat = Math.max(1, Math.floor(current?.repeat_count ?? 1));
+    if (GAMESTATE.queue_runs_on_current >= repeat) {
+        GAMESTATE.active_queue_index = (GAMESTATE.active_queue_index + 1) % GAMESTATE.queue_configs.length;
+        GAMESTATE.queue_runs_on_current = 0;
+    }
+
+    loadActiveQueue();
+}
+
+// Restart the cycle at the first queue (called on prestige).
+function resetQueueCycleForPrestige() {
+    if (!GAMESTATE.mods.queue_cycle || GAMESTATE.queue_configs.length == 0) {
+        return;
+    }
+    saveActiveQueue();
+    GAMESTATE.active_queue_index = 0;
+    GAMESTATE.queue_runs_on_current = 0;
+    loadActiveQueue();
+}
+
+// Per-reset cycle hook: queue cycling and the auto-use cycle are mutually
+// exclusive, so at most one runs.
+function applyResetCycle() {
+    if (GAMESTATE.mods.queue_cycle) {
+        applyQueueCycle();
+    } else if (GAMESTATE.mods.auto_use_cycle) {
+        applyAutoUseCycle();
+    }
+}
+
+// --- Queue editing API (used by the UI and the window bridge) ---
+
+export function getQueueConfigs(): QueueConfig[] {
+    return GAMESTATE.queue_configs;
+}
+
+export function getActiveQueueIndex(): number {
+    return GAMESTATE.active_queue_index;
+}
+
+// Save the current plan as a new queue at the end of the cycle.
+export function addQueue(): number {
+    GAMESTATE.queue_configs.push({
+        prios: clonePrioEntries(Array.from(GAMESTATE.automation_prios.entries()) as [number, number[]][]),
+        artifact_tasks: cloneArtifactSpecs(GAMESTATE.artifact_tasks),
+        auto_use_items: GAMESTATE.auto_use_items,
+        repeat_count: 1,
+    });
+    saveGame();
+    return GAMESTATE.queue_configs.length - 1;
+}
+
+export function removeQueue(index: number) {
+    if (index < 0 || index >= GAMESTATE.queue_configs.length) {
+        return;
+    }
+    GAMESTATE.queue_configs.splice(index, 1);
+    if (GAMESTATE.active_queue_index >= GAMESTATE.queue_configs.length) {
+        GAMESTATE.active_queue_index = 0;
+        GAMESTATE.queue_runs_on_current = 0;
+    }
+    // No queues left: turn cycling off so we don't cycle nothing.
+    if (GAMESTATE.queue_configs.length == 0) {
+        GAMESTATE.mods.queue_cycle = false;
+    } else if (GAMESTATE.mods.queue_cycle && index == GAMESTATE.active_queue_index) {
+        loadActiveQueue();
+    }
+    saveGame();
+}
+
+export function setQueueItemCycle(index: number, value: boolean) {
+    const queue = GAMESTATE.queue_configs[index];
+    if (!queue) {
+        return;
+    }
+    queue.auto_use_items = value;
+    // If editing the running queue, take effect now.
+    if (GAMESTATE.mods.queue_cycle && index == GAMESTATE.active_queue_index) {
+        GAMESTATE.auto_use_items = value;
+    }
+    saveGame();
+}
+
+export function setQueueRepeatCount(index: number, value: number) {
+    const queue = GAMESTATE.queue_configs[index];
+    if (!queue) {
+        return;
+    }
+    queue.repeat_count = Math.max(1, Math.floor(value));
+    saveGame();
+}
+
+// Move a queue earlier/later in the cycle order, keeping the active queue selected.
+export function moveQueue(index: number, delta: number) {
+    const target = index + delta;
+    if (index < 0 || index >= GAMESTATE.queue_configs.length
+        || target < 0 || target >= GAMESTATE.queue_configs.length) {
+        return;
+    }
+    const active = GAMESTATE.queue_configs[GAMESTATE.active_queue_index];
+    const [moved] = GAMESTATE.queue_configs.splice(index, 1);
+    GAMESTATE.queue_configs.splice(target, 0, moved as QueueConfig);
+    const new_active = GAMESTATE.queue_configs.indexOf(active as QueueConfig);
+    if (new_active >= 0) {
+        GAMESTATE.active_queue_index = new_active;
+    }
+    saveGame();
 }
 
 function autoUseItems() {
@@ -1487,6 +1686,8 @@ export function toggleAutomation(task: TaskDefinition) {
             return 0;
         });
     }
+
+    syncActiveQueueIfCycling();
 }
 
 function pickNextTaskInAutomationQueue(): Task | null {
@@ -1736,6 +1937,8 @@ function applyGameStartPrestigeEffects() {
 }
 
 export function doPrestige() {
+    // Restart the queue cycle at the first queue before the reset rebuilds tasks.
+    resetQueueCycleForPrestige();
     doAnyReset();
     GAMESTATE.prestige_count++;
     GAMESTATE.highest_prestige_zone = Math.max(GAMESTATE.highest_zone, GAMESTATE.highest_prestige_zone);
@@ -1943,6 +2146,7 @@ export interface GameMods {
     auto_use_cycle_off_resets: number;   // resets with auto-use off before one on
     auto_use_free_items: boolean;        // use "rounding-error" Items that won't reduce keep
     artifact_tasks_item_cycle_only: boolean; // only run scheduled artifact tasks on item cycles
+    queue_cycle: boolean;                // cycle through saved automation queues, one per energy reset
 }
 
 export function defaultMods(): GameMods {
@@ -1958,6 +2162,7 @@ export function defaultMods(): GameMods {
         auto_use_cycle_off_resets: 1,
         auto_use_free_items: false,
         artifact_tasks_item_cycle_only: false,
+        queue_cycle: false,
     };
 }
 
@@ -1993,6 +2198,18 @@ export function setMod(name: keyof GameMods, value: boolean | number): boolean {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (GAMESTATE.mods as any)[name] = Boolean(value);
     }
+
+    // Queue cycling and the auto-use cycle are mutually exclusive; enabling one
+    // turns the other off. Enabling cycling seeds an initial queue from the
+    // current plan (if none yet) and makes the active queue the live plan.
+    if (name == "queue_cycle" && GAMESTATE.mods.queue_cycle) {
+        GAMESTATE.mods.auto_use_cycle = false;
+        seedQueueConfigsIfEmpty();
+        loadActiveQueue();
+    } else if (name == "auto_use_cycle" && GAMESTATE.mods.auto_use_cycle) {
+        GAMESTATE.mods.queue_cycle = false;
+    }
+
     applyMods();
     saveGame();
     return true;
@@ -2031,6 +2248,14 @@ export class Gamestate {
     // from the serialized `tasks` and rebuilt from here on load.
     artifact_tasks: ArtifactTaskSpec[] = [];
     next_artifact_task_id = ARTIFACT_TASK_ID_BASE;
+
+    // Queue cycling (Game Mod): saved automation queues rotated one per energy
+    // reset. The active queue's plan is the live automation_prios + artifact_tasks;
+    // the others are stored snapshots. See QueueConfig.
+    queue_configs: QueueConfig[] = [];
+    active_queue_index = 0;
+    queue_runs_on_current = 0;
+
     current_zone: number = 0;
     highest_zone: number = 0;
     highest_zone_fully_completed: number = -1;
@@ -2310,6 +2535,20 @@ export function updateGamestate() {
 };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).getArtifactTasks = () => getArtifactTasks();
+
+// Queue cycling management.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).getQueueConfigs = () => ({ active: getActiveQueueIndex(), configs: getQueueConfigs() });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).addQueue = () => { const i = addQueue(); RENDERING.createTasks(); return { success: true, index: i }; };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).removeQueue = (index: number) => { removeQueue(index); RENDERING.createTasks(); return { success: true }; };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).setQueueItemCycle = (index: number, value: boolean) => { setQueueItemCycle(index, !!value); return { success: true }; };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).setQueueRepeatCount = (index: number, value: number) => { setQueueRepeatCount(index, value); return { success: true }; };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).moveQueue = (index: number, delta: number) => { moveQueue(index, delta); RENDERING.createTasks(); return { success: true }; };
 
 // Available tasks in the current zone.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
