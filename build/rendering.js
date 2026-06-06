@@ -1,5 +1,5 @@
 import { Task, TaskDefinition, ZONES, TaskType, PERKS_BY_ZONE, ITEMS_BY_ZONE } from "./zones.js";
-import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, BOSS_MAX_ENERGY_DISPARITY, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId } from "./simulation.js";
+import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, BOSS_MAX_ENERGY_DISPARITY, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId, getQueueConfigs, getActiveQueueIndex, addQueue, removeQueue, setQueueItemCycle, setQueueRepeatCount, moveQueue, setActiveQueue } from "./simulation.js";
 import { GAMESTATE, RENDERING, resetSave } from "./game.js";
 import { ItemType, ItemDefinition, ITEMS, HASTE_MULT, ARTIFACTS, MAGIC_RING_MULT, BOTTLED_LIGHTNING_MULT } from "./items.js";
 import { PerkDefinition, PerkType, PERKS, getPerkNameWithEmoji } from "./perks.js";
@@ -2035,23 +2035,24 @@ function setupAdvancedAutomationControls(parent) {
         setupTooltip(button, () => `${toggle.label}: ${isModEnabled(toggle.mod) ? "On" : "Off"}`, () => toggle.tooltip);
     }
     setupAutoUseCycleControl(content);
+    setupQueueCycleControl(content);
 }
 // Auto Use Cycle (Game Mod): a toggle plus a numeric input for how many Energy
 // Resets run with Auto Use Items off before one runs with it on. Lives in the
 // Advanced Automation panel alongside the simple toggles.
 function setupAutoUseCycleControl(content) {
+    const on = GAMESTATE.mods.auto_use_cycle;
     const cycle_button = createChildElement(content, "button");
-    function refresh() {
-        const on = GAMESTATE.mods.auto_use_cycle;
-        cycle_button.className = on ? "on" : "off";
-        cycle_button.textContent = `Auto Use Cycle: ${on ? "On" : "Off"}`;
-    }
-    refresh();
+    cycle_button.className = on ? "on" : "off";
+    cycle_button.textContent = `Auto Use Cycle: ${on ? "On" : "Off"}`;
     cycle_button.addEventListener("click", () => {
         setMod("auto_use_cycle", !GAMESTATE.mods.auto_use_cycle);
-        refresh();
+        setupControls(); // rebuild: reflects mutual exclusion with Queue Cycle
     });
-    setupTooltip(cycle_button, () => `Auto Use Cycle: ${GAMESTATE.mods.auto_use_cycle ? "On" : "Off"}`, () => "Cycle Auto Use Items across Energy Resets: keep it off for the set number of resets (banking Items), then on for one reset (spending them), and repeat. Overrides the manual Auto Use Items toggle while enabled. The cycle restarts on Prestige.");
+    setupTooltip(cycle_button, () => `Auto Use Cycle: ${GAMESTATE.mods.auto_use_cycle ? "On" : "Off"}`, () => "Cycle Auto Use Items across Energy Resets: keep it off for the set number of resets (banking Items), then on for one reset (spending them), and repeat. Overrides the manual Auto Use Items toggle while enabled. The cycle restarts on Prestige. Mutually exclusive with Queue Cycle.");
+    if (!on) {
+        return;
+    }
     const cycle_label = createChildElement(content, "label");
     cycle_label.className = "advanced-automation-label";
     cycle_label.textContent = "Resets off per cycle:";
@@ -2064,6 +2065,72 @@ function setupAutoUseCycleControl(content) {
             setMod("auto_use_cycle_off_resets", value);
         },
     });
+}
+function setupQueueCycleControl(content) {
+    const on = GAMESTATE.mods.queue_cycle;
+    const button = createChildElement(content, "button");
+    button.className = on ? "on" : "off";
+    button.textContent = `Queue Cycle: ${on ? "On" : "Off"}`;
+    button.addEventListener("click", () => {
+        setMod("queue_cycle", !GAMESTATE.mods.queue_cycle);
+        setupControls();
+        recreateTasks(); // the active queue's plan may now be live
+    });
+    setupTooltip(button, () => `Queue Cycle: ${GAMESTATE.mods.queue_cycle ? "On" : "Off"}`, () => "Rotate through saved automation queues, advancing one per Energy Reset. Each queue has its own task priorities, scheduled artifact tasks, and whether it's an item cycle (Auto Use Items on). Mutually exclusive with Auto Use Cycle; restarts at the first queue on Prestige.");
+    if (!on) {
+        return;
+    }
+    const configs = getQueueConfigs();
+    const active = getActiveQueueIndex();
+    for (let i = 0; i < configs.length; i++) {
+        const queue = configs[i];
+        if (!queue) {
+            continue;
+        }
+        const row = createChildElement(content, "div");
+        row.className = "queue-config-row";
+        const label = createChildElement(row, "span");
+        label.className = "queue-config-label";
+        label.textContent = `${i === active ? "▶ " : ""}Queue ${i + 1}`;
+        const edit_button = createChildElement(row, "button");
+        edit_button.className = "queue-config-btn" + (i === active ? " on" : "");
+        edit_button.textContent = "Edit";
+        edit_button.addEventListener("click", () => { setActiveQueue(i); recreateTasks(); setupControls(); });
+        setupTooltip(edit_button, () => "Edit this queue", () => "Make this queue active so you can view and edit its task priorities and artifact tasks. The cycle continues from here.");
+        const item_button = createChildElement(row, "button");
+        item_button.className = "queue-config-btn" + (queue.auto_use_items ? " on" : "");
+        item_button.textContent = queue.auto_use_items ? "Items: On" : "Items: Off";
+        item_button.addEventListener("click", () => { setQueueItemCycle(i, !queue.auto_use_items); setupControls(); });
+        setupTooltip(item_button, () => "Item cycle", () => "Whether Auto Use Items is on while this queue is active (i.e. this is an item cycle).");
+        const repeat_label = createChildElement(row, "label");
+        repeat_label.className = "queue-config-repeat";
+        repeat_label.textContent = "×";
+        createNumericInput(repeat_label, {
+            min: 1,
+            max: 99,
+            initialValue: queue.repeat_count,
+            ariaLabel: `Energy Resets to run queue ${i + 1} before advancing`,
+            onChange: (value) => { setQueueRepeatCount(i, value); },
+        });
+        const up_button = createChildElement(row, "button");
+        up_button.className = "queue-config-btn";
+        up_button.textContent = "↑";
+        up_button.addEventListener("click", () => { moveQueue(i, -1); setupControls(); });
+        const down_button = createChildElement(row, "button");
+        down_button.className = "queue-config-btn";
+        down_button.textContent = "↓";
+        down_button.addEventListener("click", () => { moveQueue(i, 1); setupControls(); });
+        const delete_button = createChildElement(row, "button");
+        delete_button.className = "queue-config-btn";
+        delete_button.textContent = "✕";
+        delete_button.addEventListener("click", () => { removeQueue(i); recreateTasks(); setupControls(); });
+        setupTooltip(delete_button, () => "Delete this queue", () => "Remove this saved queue from the cycle.");
+    }
+    const add_button = createChildElement(content, "button");
+    add_button.className = "queue-config-add";
+    add_button.textContent = "Save current as new queue";
+    add_button.addEventListener("click", () => { addQueue(); setupControls(); });
+    setupTooltip(add_button, () => "Add queue", () => "Save the current task priorities and artifact tasks as a new queue at the end of the cycle.");
 }
 // MARK: Extra stats
 function updateExtraStats() {

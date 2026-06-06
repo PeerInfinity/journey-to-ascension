@@ -1043,3 +1043,48 @@ footer {
 .artifact-task-control.on {
     background-color: rgb(49, 221, 72);
 }
+
+/* MARK: Queue Cycle Config
+*/
+
+.queue-config-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 4px 0;
+}
+
+.queue-config-label {
+    min-width: 70px;
+    font-size: 0.85em;
+}
+
+.queue-config-btn {
+    height: 24px;
+    padding: 0 6px;
+    border-radius: var(--default-border-radius);
+    background: var(--element-background-color);
+    cursor: pointer;
+    font-size: 0.8em;
+}
+
+.queue-config-btn.on {
+    background-color: rgb(49, 221, 72);
+}
+
+.queue-config-repeat {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 0.85em;
+}
+
+.queue-config-add {
+    margin-top: 6px;
+    padding: 4px 8px;
+    border-radius: var(--default-border-radius);
+    background: var(--element-background-color);
+    cursor: pointer;
+    font-size: 0.85em;
+}

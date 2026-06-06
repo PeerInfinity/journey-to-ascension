@@ -1321,6 +1321,20 @@ export function getActiveQueueIndex(): number {
     return GAMESTATE.active_queue_index;
 }
 
+// Make a queue active so its plan can be viewed/edited. The cycle then
+// continues advancing from this queue.
+export function setActiveQueue(index: number) {
+    if (index < 0 || index >= GAMESTATE.queue_configs.length) {
+        return;
+    }
+    saveActiveQueue();
+    GAMESTATE.active_queue_index = index;
+    GAMESTATE.queue_runs_on_current = 0;
+    loadActiveQueue();
+    updateEnabledTasks();
+    saveGame();
+}
+
 // Save the current plan as a new queue at the end of the cycle.
 export function addQueue(): number {
     GAMESTATE.queue_configs.push({
