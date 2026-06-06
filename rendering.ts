@@ -1,5 +1,5 @@
 import { Task, TaskDefinition, ZONES, TaskType, PERKS_BY_ZONE, ITEMS_BY_ZONE } from "./zones.js";
-import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, BOSS_MAX_ENERGY_DISPARITY, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId, getQueueConfigs, getActiveQueueIndex, addQueue, removeQueue, setQueueItemCycle, setQueueRepeatCount, moveQueue, setActiveQueue, isEditMode, enterEditMode, exitEditMode, setEditZone, getEditMaxZone, type GameMods } from "./simulation.js";
+import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, BOSS_MAX_ENERGY_DISPARITY, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId, getQueueConfigs, getActiveQueueIndex, getQueueRunsOnCurrent, advanceQueueCycle, addQueue, removeQueue, setQueueItemCycle, setQueueRepeatCount, moveQueue, setActiveQueue, isEditMode, enterEditMode, exitEditMode, setEditZone, getEditMaxZone, type GameMods } from "./simulation.js";
 import { GAMESTATE, RENDERING, resetSave } from "./game.js";
 import { ItemType, ItemDefinition, ITEMS, HASTE_MULT, ARTIFACTS, MAGIC_RING_MULT, BOTTLED_LIGHTNING_MULT } from "./items.js";
 import { PerkDefinition, PerkType, PERKS, getPerkNameWithEmoji } from "./perks.js";
@@ -2578,18 +2578,31 @@ function setupQueueCycleControl(content: Element) {
 
     const configs = getQueueConfigs();
     const active = getActiveQueueIndex();
+    const runs_done = getQueueRunsOnCurrent();
+
+    if (configs.length >= 2) {
+        const advance_button = createChildElement(content, "button") as HTMLButtonElement;
+        advance_button.className = "queue-config-add";
+        advance_button.textContent = "⏭ Advance to next queue now";
+        advance_button.addEventListener("click", () => { advanceQueueCycle(); recreateTasks(); setupControls(); });
+        setupTooltip(advance_button, () => "Advance cycle", () =>
+            "Switch to the next queue immediately (wrapping), applying its plan now instead of waiting for the next Energy Reset.");
+    }
 
     for (let i = 0; i < configs.length; i++) {
         const queue = configs[i];
         if (!queue) {
             continue;
         }
+        const is_active = i === active;
         const row = createChildElement(content, "div");
-        row.className = "queue-config-row";
+        row.className = "queue-config-row" + (is_active ? " active" : "");
 
         const label = createChildElement(row, "span");
         label.className = "queue-config-label";
-        label.textContent = `${i === active ? "▶ " : ""}Queue ${i + 1}`;
+        // Active row shows which run of its repeat-count it's on.
+        const progress = is_active && queue.repeat_count > 1 ? ` (run ${Math.min(runs_done + 1, queue.repeat_count)}/${queue.repeat_count})` : "";
+        label.textContent = `${is_active ? "▶ " : ""}Queue ${i + 1}${progress}`;
 
         const edit_button = createChildElement(row, "button") as HTMLButtonElement;
         edit_button.className = "queue-config-btn" + (i === active ? " on" : "");

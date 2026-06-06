@@ -1144,3 +1144,8 @@ footer {
     background-color: #8c386d;
     color: #fff;
 }
+
+.queue-config-row.active {
+    border-left: 3px solid #8c386d;
+    padding-left: 4px;
+}

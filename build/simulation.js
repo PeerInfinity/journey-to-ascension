@@ -1090,8 +1090,24 @@ export function setActiveQueue(index) {
     GAMESTATE.active_queue_index = index;
     GAMESTATE.queue_runs_on_current = 0;
     loadActiveQueue();
+    // Refresh the current zone's artifact tasks to match the now-active queue,
+    // keeping live state consistent if this was a live switch (not in edit mode).
+    GAMESTATE.tasks = GAMESTATE.tasks.filter(t => !isArtifactTaskId(t.task_definition.id));
+    injectArtifactTasksForCurrentZone();
     updateEnabledTasks();
     saveGame();
+}
+// Immediately advance the cycle to the next queue (wrapping), applying its plan
+// now rather than waiting for the next energy reset.
+export function advanceQueueCycle() {
+    if (GAMESTATE.queue_configs.length == 0) {
+        return;
+    }
+    setActiveQueue((GAMESTATE.active_queue_index + 1) % GAMESTATE.queue_configs.length);
+}
+// Resets completed on the active queue (for "run k of N" display).
+export function getQueueRunsOnCurrent() {
+    return GAMESTATE.queue_runs_on_current;
 }
 // Save the current plan as a new queue at the end of the cycle.
 export function addQueue() {
@@ -2156,6 +2172,8 @@ window.setQueueItemCycle = (index, value) => { setQueueItemCycle(index, !!value)
 window.setQueueRepeatCount = (index, value) => { setQueueRepeatCount(index, value); return { success: true }; };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 window.moveQueue = (index, delta) => { moveQueue(index, delta); RENDERING.createTasks(); return { success: true }; };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.advanceQueueCycle = () => { advanceQueueCycle(); RENDERING.createTasks(); return { success: true, active: getActiveQueueIndex() }; };
 // Priority edit mode.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 window.enterEditMode = () => ({ success: enterEditMode() });

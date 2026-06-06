@@ -59,6 +59,8 @@ export interface QueueConfig {
 export declare function getQueueConfigs(): QueueConfig[];
 export declare function getActiveQueueIndex(): number;
 export declare function setActiveQueue(index: number): void;
+export declare function advanceQueueCycle(): void;
+export declare function getQueueRunsOnCurrent(): number;
 export declare function addQueue(): number;
 export declare function removeQueue(index: number): void;
 export declare function setQueueItemCycle(index: number, value: boolean): void;
