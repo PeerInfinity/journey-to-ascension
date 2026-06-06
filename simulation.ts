@@ -492,6 +492,9 @@ export function applyTaskRepStartEffects(task: Task) {
 }
 
 export function clickTask(task: Task) {
+    if (_edit_mode) {
+        return; // can't start tasks while editing priorities
+    }
     if (GAMESTATE.active_task == task) {
         GAMESTATE.active_task = null;
     }
@@ -1402,6 +1405,61 @@ export function moveQueue(index: number, delta: number) {
         GAMESTATE.active_queue_index = new_active;
     }
     saveGame();
+}
+
+// MARK: Priority Edit Mode
+
+// A frozen, zone-navigable view for arranging automation priorities. While on,
+// the sim is paused (no task starts) and current_zone is repointed at the zone
+// being viewed; the run's real zone and tasks are saved and restored on exit.
+let _edit_mode = false;
+let _edit_saved_zone = 0;
+let _edit_saved_tasks: Task[] = [];
+
+export function isEditMode(): boolean {
+    return _edit_mode;
+}
+
+export function getEditMaxZone(): number {
+    return Math.min(GAMESTATE.highest_zone_ever, ZONES.length - 1);
+}
+
+// Enter edit mode. Refused (returns false) while a Task is running.
+export function enterEditMode(): boolean {
+    if (_edit_mode) {
+        return true;
+    }
+    if (GAMESTATE.active_task != null) {
+        return false;
+    }
+    _edit_mode = true;
+    _edit_saved_zone = GAMESTATE.current_zone;
+    _edit_saved_tasks = GAMESTATE.tasks;
+    return true;
+}
+
+export function exitEditMode() {
+    if (!_edit_mode) {
+        return;
+    }
+    _edit_mode = false;
+    GAMESTATE.current_zone = _edit_saved_zone;
+    // Restore the run's real tasks (reps intact), refreshing artifact tasks in
+    // case the active queue changed while editing.
+    GAMESTATE.tasks = _edit_saved_tasks.filter(t => !isArtifactTaskId(t.task_definition.id));
+    _edit_saved_tasks = [];
+    injectArtifactTasksForCurrentZone();
+    updateEnabledTasks();
+    saveGame();
+}
+
+// View a different zone's tasks for editing, clamped to zones reached.
+export function setEditZone(zone: number) {
+    if (!_edit_mode) {
+        return;
+    }
+    GAMESTATE.current_zone = Math.max(0, Math.min(zone, getEditMaxZone()));
+    initializeTasks();
 }
 
 function autoUseItems() {
@@ -2410,6 +2468,9 @@ export function calcTickRate() {
 }
 
 export function updateGamestate() {
+    if (_edit_mode) {
+        return; // frozen while editing priorities
+    }
     if (GAMESTATE.is_in_energy_reset) {
         return;
     }
@@ -2563,6 +2624,14 @@ export function updateGamestate() {
 (window as any).setQueueRepeatCount = (index: number, value: number) => { setQueueRepeatCount(index, value); return { success: true }; };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).moveQueue = (index: number, delta: number) => { moveQueue(index, delta); RENDERING.createTasks(); return { success: true }; };
+
+// Priority edit mode.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).enterEditMode = () => ({ success: enterEditMode() });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).exitEditMode = () => { exitEditMode(); return { success: true }; };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).setEditZone = (zone: number) => { setEditZone(zone); return { success: true, zone: GAMESTATE.current_zone }; };
 
 // Available tasks in the current zone.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

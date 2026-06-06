@@ -1,5 +1,5 @@
 import { Task, TaskDefinition, ZONES, TaskType, PERKS_BY_ZONE, ITEMS_BY_ZONE } from "./zones.js";
-import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, BOSS_MAX_ENERGY_DISPARITY, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId, getQueueConfigs, getActiveQueueIndex, addQueue, removeQueue, setQueueItemCycle, setQueueRepeatCount, moveQueue, setActiveQueue } from "./simulation.js";
+import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, BOSS_MAX_ENERGY_DISPARITY, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId, getQueueConfigs, getActiveQueueIndex, addQueue, removeQueue, setQueueItemCycle, setQueueRepeatCount, moveQueue, setActiveQueue, isEditMode, enterEditMode, exitEditMode, setEditZone, getEditMaxZone } from "./simulation.js";
 import { GAMESTATE, RENDERING, resetSave } from "./game.js";
 import { ItemType, ItemDefinition, ITEMS, HASTE_MULT, ARTIFACTS, MAGIC_RING_MULT, BOTTLED_LIGHTNING_MULT } from "./items.js";
 import { PerkDefinition, PerkType, PERKS, getPerkNameWithEmoji } from "./perks.js";
@@ -301,6 +301,49 @@ function calcLevelsGained(type, xp_gained) {
 }
 // MARK: Tasks
 const TASK_TYPE_NAMES = ["Normal", "Travel", "Mandatory", "Prestige", "Boss"];
+// A transient message in the messages area (used for soft-blocked actions).
+function flashMessage(text) {
+    const messages = RENDERING.messages_element;
+    if (!messages) {
+        return;
+    }
+    const div = document.createElement("div");
+    div.className = "message";
+    div.textContent = text;
+    messages.appendChild(div);
+    setTimeout(() => { if (div.parentElement === messages) {
+        messages.removeChild(div);
+    } }, 3000);
+}
+// Re-render the view after entering/leaving/navigating edit mode.
+function refreshAfterEditChange() {
+    recreateTasks();
+    setupZone();
+    setupControls();
+}
+// Prominent banner shown at the top of the task list while editing priorities,
+// with zone navigation (clamped to zones reached) and a Done button.
+function createEditModeBanner(parent) {
+    const banner = createChildElement(parent, "div");
+    banner.className = "edit-mode-banner";
+    const prev = createChildElement(banner, "button");
+    prev.className = "edit-mode-nav";
+    prev.textContent = "◀";
+    prev.classList.toggle("disabled", GAMESTATE.current_zone <= 0);
+    prev.addEventListener("click", () => { setEditZone(GAMESTATE.current_zone - 1); refreshAfterEditChange(); });
+    const label = createChildElement(banner, "span");
+    label.className = "edit-mode-label";
+    label.textContent = `✏️ Editing Priorities — Zone ${GAMESTATE.current_zone + 1}`;
+    const next = createChildElement(banner, "button");
+    next.className = "edit-mode-nav";
+    next.textContent = "▶";
+    next.classList.toggle("disabled", GAMESTATE.current_zone >= getEditMaxZone());
+    next.addEventListener("click", () => { setEditZone(GAMESTATE.current_zone + 1); refreshAfterEditChange(); });
+    const done = createChildElement(banner, "button");
+    done.className = "edit-mode-done";
+    done.textContent = "Done";
+    done.addEventListener("click", () => { exitEditMode(); refreshAfterEditChange(); });
+}
 // A plain section header inside the task list (e.g. "Procgen Exits").
 function createTaskSectionHeader(parent, title) {
     const header = createChildElement(parent, "div");
@@ -1977,6 +2020,21 @@ function setupAutomationControls() {
         const tooltip = "The Zone you specify here will be used by the 'To Zone' automation";
         return tooltip;
     });
+    const editing = isEditMode();
+    const edit_priorities_button = createChildElement(automation_div, "button");
+    edit_priorities_button.className = "edit-priorities-button" + (editing ? " on" : "");
+    edit_priorities_button.textContent = editing ? "Done Editing Priorities" : "Edit Priorities";
+    edit_priorities_button.addEventListener("click", () => {
+        if (editing) {
+            exitEditMode();
+        }
+        else if (!enterEditMode()) {
+            flashMessage("Stop the current task before editing priorities.");
+            return;
+        }
+        refreshAfterEditChange();
+    });
+    setupTooltip(edit_priorities_button, () => editing ? "Done editing" : "Edit priorities", () => "Browse the zones you've reached and set Task automation priorities for each, without anything running. Requires no Task to be in progress.");
     setupAdvancedAutomationControls(automation_div);
 }
 // Game Mods — extra automation toggles, shown as a collapsible panel under
@@ -2095,7 +2153,15 @@ function setupQueueCycleControl(content) {
         const edit_button = createChildElement(row, "button");
         edit_button.className = "queue-config-btn" + (i === active ? " on" : "");
         edit_button.textContent = "Edit";
-        edit_button.addEventListener("click", () => { setActiveQueue(i); recreateTasks(); setupControls(); });
+        edit_button.addEventListener("click", () => {
+            if (!isEditMode() && !enterEditMode()) {
+                flashMessage("Stop the current task before editing priorities.");
+                return;
+            }
+            setActiveQueue(i);
+            setEditZone(GAMESTATE.current_zone); // rebuild the view under the now-active queue
+            refreshAfterEditChange();
+        });
         setupTooltip(edit_button, () => "Edit this queue", () => "Make this queue active so you can view and edit its task priorities and artifact tasks. The cycle continues from here.");
         const item_button = createChildElement(row, "button");
         item_button.className = "queue-config-btn" + (queue.auto_use_items ? " on" : "");
@@ -2411,6 +2477,9 @@ export class Rendering {
             return;
         }
         tasks_div.innerHTML = "";
+        if (isEditMode()) {
+            createEditModeBanner(tasks_div);
+        }
         // Split into the zone's own tasks, host-injected procgen exit tasks
         // (ids >= 10000, managed mode only), and player artifact tasks.
         const normal_tasks = [];
