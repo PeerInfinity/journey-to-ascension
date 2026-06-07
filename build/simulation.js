@@ -360,9 +360,9 @@ function maybeAutoUseHaste(task) {
         return;
     }
     // Only when item auto-use is currently enabled — so under an Auto Use Cycle
-    // it fires only on the "on" runs — during automation, and never stacking on
-    // top of an already-queued Scroll.
-    if (!GAMESTATE.auto_use_items || GAMESTATE.automation_mode == AutomationMode.Off || GAMESTATE.queued_scrolls_of_haste > 0) {
+    // it fires only on the "on" runs — and never stacking on top of an
+    // already-queued Scroll. Applies to both automated and manually-started reps.
+    if (!GAMESTATE.auto_use_items || GAMESTATE.queued_scrolls_of_haste > 0) {
         return;
     }
     const scrolls_held = GAMESTATE.items.get(ItemType.ScrollOfHaste) ?? 0;
