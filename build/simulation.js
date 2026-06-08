@@ -376,6 +376,33 @@ function maybeAutoUseHaste(task) {
         disableItemUndo();
     }
 }
+// Auto Bottled Lightning: like Auto Scroll of Haste, but Bottled Lightning only
+// affects Boss Tasks, so this only acts on Bosses. Runs after maybeAutoUseHaste,
+// so its cost estimate already accounts for any Scroll just auto-queued.
+function maybeAutoUseLightning(task) {
+    if (!GAMESTATE.mods.auto_lightning) {
+        return;
+    }
+    if (task.task_definition.type != TaskType.Boss) {
+        return; // Bottled Lightning does nothing on non-Boss Tasks
+    }
+    // Same gating as auto-haste: only while item auto-use is on, and never
+    // stacking on top of an already-queued Bottled Lightning.
+    if (!GAMESTATE.auto_use_items || GAMESTATE.queued_lightning > 0) {
+        return;
+    }
+    const lightning_held = GAMESTATE.items.get(ItemType.BottledLightning) ?? 0;
+    if (lightning_held <= 0 || isSingleTickTask(task)) {
+        return; // nothing to spend, or the rep is too cheap to be worth one
+    }
+    const hasted = GAMESTATE.queued_scrolls_of_haste > 0;
+    const cost = calcTaskEnergyCost(task, hasted, false);
+    const budget = GAMESTATE.current_energy / lightning_held;
+    if (cost > budget) {
+        useItem(ItemType.BottledLightning, 1);
+        disableItemUndo();
+    }
+}
 // Note that free executions don't call this
 export function applyTaskRepStartEffects(task) {
     // Artifact effects (auto-/queued Scroll of Haste, Magic Ring, Bottled
@@ -384,6 +411,7 @@ export function applyTaskRepStartEffects(task) {
     // queued Artifact. Keep them for the next real task.
     if (!isSyntheticTask(task)) {
         maybeAutoUseHaste(task);
+        maybeAutoUseLightning(task);
         if (GAMESTATE.queued_scrolls_of_haste > 0) {
             task.hasted = true;
             GAMESTATE.queued_scrolls_of_haste--;
@@ -1941,6 +1969,7 @@ export function defaultMods() {
         suppress_prestige_popup: false,
         resume_automation_on_reset: false,
         auto_haste: false,
+        auto_lightning: false,
         auto_use_cycle: false,
         auto_use_cycle_off_resets: 1,
         auto_use_free_items: false,

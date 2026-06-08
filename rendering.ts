@@ -2470,6 +2470,11 @@ const ADVANCED_AUTOMATION_TOGGLES: { label: string; tooltip: string; mod: keyof 
         mod: "auto_haste",
     },
     {
+        label: "Auto Bottled Lightning",
+        tooltip: "Automatically spend held Bottled Lightning on Boss Tasks during automation, on reps you couldn't otherwise afford — when a single rep would cost more energy than you have left. The Lightning's speed-up lowers that Boss rep's energy cost so the run can continue. Like Auto Scroll of Haste, but only for Bosses. Only acts while Auto Use Items is enabled.",
+        mod: "auto_lightning",
+    },
+    {
         label: "Use Free Items",
         tooltip: "Even on cycles where Auto Use Items is off, automatically use Items you can spend without reducing how many you keep on the next Energy Reset (the surplus left by the keep rounding). Each Item is used once the last Task rep that could grant it this cycle has finished, so its kept count is unaffected. Artifacts (such as Scrolls of Haste) are excluded.",
         mod: "auto_use_free_items",

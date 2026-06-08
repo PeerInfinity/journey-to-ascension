@@ -134,6 +134,7 @@ export interface GameMods {
     suppress_prestige_popup: boolean;
     resume_automation_on_reset: boolean;
     auto_haste: boolean;
+    auto_lightning: boolean;
     auto_use_cycle: boolean;
     auto_use_cycle_off_resets: number;
     auto_use_free_items: boolean;
