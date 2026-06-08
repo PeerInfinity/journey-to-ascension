@@ -628,11 +628,12 @@ function doMasteryOfTimeTaskCompletion() {
         if (isTaskFullyCompleted(task)) {
             continue;
         }
-        // Synthetic artifact tasks have their own gating (a held copy, the
-        // item-cycle flag, automation priority) and consume an Artifact when
-        // they run, so don't let Mastery of Time fire them for free — that would
-        // spend Artifacts outside that gating and on banking cycles.
-        if (isArtifactTaskId(task.task_definition.id)) {
+        // Synthetic tasks — player-scheduled artifact tasks and host-injected
+        // exit-choice tasks — have their own gating and side effects (consuming
+        // an Artifact, or firing a one-shot host exit callback). Don't let
+        // Mastery of Time fire them for free; they run only via their own paths.
+        if (isArtifactTaskId(task.task_definition.id)
+            || _synthetic_task_callbacks.has(task.task_definition.id)) {
             continue;
         }
         if (!isSingleTickTask(task)) {
