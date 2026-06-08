@@ -998,6 +998,12 @@ footer {
 
 .mod-fraction-row input {
     width: 80px;
+    /* Match the blue of the numeric inputs instead of the default white. */
+    background: var(--element-foreground-color-brighter);
+}
+
+.mod-fraction-row input:focus {
+    background: var(--element-foreground-color);
 }
 
 /* Advanced Automation panel (Controls section) */
@@ -1113,6 +1119,12 @@ footer {
     border-radius: var(--default-border-radius);
     border: none;
     font-size: 0.8em;
+    /* Match the blue of the numeric inputs instead of the default white. */
+    background: var(--element-foreground-color-brighter);
+}
+
+.queue-name-input:focus {
+    background: var(--element-foreground-color);
 }
 
 /* Keep the per-queue controls inline (override the panel's full-width buttons). */
