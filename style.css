@@ -673,12 +673,6 @@ button.do-prestige {
     position: relative;
     height: 730px;
     width: 590px;
-    /* Never exceed the visible viewport, so on short screens (e.g. a phone in
-       landscape) the box shrinks and its inner .scroll-area scrolls all content
-       into reach instead of the bottom spilling below the screen. dvh tracks the
-       dynamic viewport (excludes mobile browser chrome) where vh would not. */
-    max-height: calc(100dvh - 16px);
-    max-width: calc(100vw - 16px);
     padding: 0;
 
     scrollbar-color: var(--element-foreground-color) var(--element-foreground-color-brighter); /* Firefox */
@@ -901,11 +895,32 @@ div.prestige-purchase {
     flex-direction: column;
     color: var(--default-text-color);
     gap: var(--standard-div-spacing);
+    /* Never exceed the visible viewport, so on short screens (e.g. a phone in
+       landscape) popups shrink and their inner .scroll-area scrolls all content
+       into reach instead of the bottom spilling below the screen. dvh tracks the
+       dynamic viewport (excludes mobile browser chrome) where vh would not. */
+    max-height: calc(100dvh - 16px);
+    max-width: calc(100vw - 16px);
 }
 
 #settings button:not(.close) {
     width: 120px;
     font-size: 1.2em;
+}
+
+/* Settings is static HTML with no JS-built scroll-area, so its content is
+   wrapped in one. Move the box padding onto that inner area and let it shrink
+   (flex-shrink, min-height:0) when the box is capped to a short viewport, so it
+   scrolls while the absolutely-positioned close button stays fixed to the box. */
+#settings {
+    padding: 0;
+    overflow: hidden;
+}
+
+#settings .scroll-area {
+    height: auto;
+    min-height: 0;
+    flex: 0 1 auto;
 }
 
 /* MARK: Changelog
