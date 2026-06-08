@@ -895,12 +895,12 @@ div.prestige-purchase {
     flex-direction: column;
     color: var(--default-text-color);
     gap: var(--standard-div-spacing);
-    /* Never exceed the visible viewport, so on short screens (e.g. a phone in
-       landscape) popups shrink and their inner .scroll-area scrolls all content
-       into reach instead of the bottom spilling below the screen. dvh tracks the
-       dynamic viewport (excludes mobile browser chrome) where vh would not. */
+    /* Never exceed the visible viewport height, so on short screens (e.g. a
+       phone in landscape) popups shrink and their inner .scroll-area scrolls all
+       content into reach instead of the bottom spilling below the screen. dvh
+       tracks the dynamic viewport (excludes mobile browser chrome) where vh
+       would not. */
     max-height: calc(100dvh - 16px);
-    max-width: calc(100vw - 16px);
 }
 
 #settings button:not(.close) {
