@@ -470,18 +470,24 @@ function maybeAutoUseHaste(task: Task) {
 
 // Note that free executions don't call this
 export function applyTaskRepStartEffects(task: Task) {
-    maybeAutoUseHaste(task);
-    if (GAMESTATE.queued_scrolls_of_haste > 0) {
-        task.hasted = true;
-        GAMESTATE.queued_scrolls_of_haste--;
-    }
-    if (GAMESTATE.queued_magic_rings > 0) {
-        task.xp_boosted = true;
-        GAMESTATE.queued_magic_rings--;
-    }
-    if (GAMESTATE.queued_lightning > 0 && task.task_definition.type == TaskType.Boss) {
-        task.lightning = true;
-        GAMESTATE.queued_lightning--;
+    // Artifact effects (auto-/queued Scroll of Haste, Magic Ring, Bottled
+    // Lightning) shouldn't be spent on synthetic tasks: artifact tasks and host
+    // exit tasks are instant and skill-less, so applying them just wastes the
+    // queued Artifact. Keep them for the next real task.
+    if (!isSyntheticTask(task)) {
+        maybeAutoUseHaste(task);
+        if (GAMESTATE.queued_scrolls_of_haste > 0) {
+            task.hasted = true;
+            GAMESTATE.queued_scrolls_of_haste--;
+        }
+        if (GAMESTATE.queued_magic_rings > 0) {
+            task.xp_boosted = true;
+            GAMESTATE.queued_magic_rings--;
+        }
+        if (GAMESTATE.queued_lightning > 0 && task.task_definition.type == TaskType.Boss) {
+            task.lightning = true;
+            GAMESTATE.queued_lightning--;
+        }
     }
 
     if (task.task_definition.use_item != ItemType.Count) {
@@ -769,12 +775,10 @@ function doMasteryOfTimeTaskCompletion() {
             continue;
         }
 
-        // Synthetic tasks — player-scheduled artifact tasks and host-injected
-        // exit-choice tasks — have their own gating and side effects (consuming
-        // an Artifact, or firing a one-shot host exit callback). Don't let
-        // Mastery of Time fire them for free; they run only via their own paths.
-        if (isArtifactTaskId(task.task_definition.id)
-            || _synthetic_task_callbacks.has(task.task_definition.id)) {
+        // Don't let Mastery of Time fire synthetic tasks for free — that would
+        // spend a scheduled Artifact outside its gating, or fire a host exit
+        // callback. They run only through their own paths.
+        if (isSyntheticTask(task)) {
             continue;
         }
 
@@ -1129,6 +1133,15 @@ export interface ArtifactTaskSpec {
 
 export function isArtifactTaskId(id: number): boolean {
     return id >= ARTIFACT_TASK_ID_BASE;
+}
+
+// True for tasks we synthesise/inject rather than real zone tasks: player-
+// scheduled artifact tasks and host-injected exit-choice tasks. They have their
+// own gating and side effects, so generic mechanics (Mastery of Time free
+// completion, queued Artifact effects) should skip them.
+function isSyntheticTask(task: Task): boolean {
+    return isArtifactTaskId(task.task_definition.id)
+        || _synthetic_task_callbacks.has(task.task_definition.id);
 }
 
 function getArtifactTaskSpec(id: number): ArtifactTaskSpec | undefined {
