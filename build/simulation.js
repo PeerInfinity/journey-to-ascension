@@ -377,8 +377,10 @@ function maybeAutoUseHaste(task) {
     }
 }
 // Auto Bottled Lightning: like Auto Scroll of Haste, but Bottled Lightning only
-// affects Boss Tasks, so this only acts on Bosses. Runs after maybeAutoUseHaste,
-// so its cost estimate already accounts for any Scroll just auto-queued.
+// affects Boss Tasks, so this only acts on Bosses. Runs before maybeAutoUseHaste
+// (Lightning is applied first); maybeAutoUseHaste's cost estimate then accounts
+// for any Lightning just auto-queued, so it only adds a Scroll if the Boss rep
+// is still unaffordable.
 function maybeAutoUseLightning(task) {
     if (!GAMESTATE.mods.auto_lightning) {
         return;
@@ -410,8 +412,8 @@ export function applyTaskRepStartEffects(task) {
     // exit tasks are instant and skill-less, so applying them just wastes the
     // queued Artifact. Keep them for the next real task.
     if (!isSyntheticTask(task)) {
-        maybeAutoUseHaste(task);
         maybeAutoUseLightning(task);
+        maybeAutoUseHaste(task);
         if (GAMESTATE.queued_scrolls_of_haste > 0) {
             task.hasted = true;
             GAMESTATE.queued_scrolls_of_haste--;
