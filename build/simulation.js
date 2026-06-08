@@ -628,6 +628,13 @@ function doMasteryOfTimeTaskCompletion() {
         if (isTaskFullyCompleted(task)) {
             continue;
         }
+        // Synthetic artifact tasks have their own gating (a held copy, the
+        // item-cycle flag, automation priority) and consume an Artifact when
+        // they run, so don't let Mastery of Time fire them for free — that would
+        // spend Artifacts outside that gating and on banking cycles.
+        if (isArtifactTaskId(task.task_definition.id)) {
+            continue;
+        }
         if (!isSingleTickTask(task)) {
             continue;
         }
