@@ -2206,7 +2206,8 @@ function setupQueueCycleControl(content) {
         top_row.className = "queue-config-top";
         const label = createChildElement(top_row, "span");
         label.className = "queue-config-label";
-        const progress = is_active && queue.repeat_count > 1 ? ` (run ${Math.min(runs_done + 1, queue.repeat_count)}/${queue.repeat_count})` : "";
+        const progress = queue.repeat_count <= 0 ? " (skipped)"
+            : is_active && queue.repeat_count > 1 ? ` (run ${Math.min(runs_done + 1, queue.repeat_count)}/${queue.repeat_count})` : "";
         label.textContent = `${is_active ? "▶ " : ""}Queue ${i + 1}${progress}`;
         const name_input = createChildElement(top_row, "input");
         name_input.type = "text";
@@ -2255,10 +2256,10 @@ function setupQueueCycleControl(content) {
         repeat_label.className = "queue-config-repeat";
         repeat_label.textContent = "×";
         createNumericInput(repeat_label, {
-            min: 1,
+            min: 0,
             max: 99,
             initialValue: queue.repeat_count,
-            ariaLabel: `Energy Resets to run queue ${i + 1} before advancing`,
+            ariaLabel: `Energy Resets to run queue ${i + 1} before advancing (0 to skip)`,
             onChange: (value) => { setQueueRepeatCount(i, value); },
         });
         const up_button = createChildElement(row, "button");

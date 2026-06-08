@@ -1325,13 +1325,31 @@ function applyQueueCycle() {
 
     GAMESTATE.queue_runs_on_current += 1;
     const current = activeQueue();
-    const repeat = Math.max(1, Math.floor(current?.repeat_count ?? 1));
+    // repeat_count 0 means "skip this queue": with a 0 limit the run counter is
+    // always >= it, so we advance immediately (and past any other 0-count queues).
+    const repeat = Math.max(0, Math.floor(current?.repeat_count ?? 1));
     if (GAMESTATE.queue_runs_on_current >= repeat) {
-        GAMESTATE.active_queue_index = (GAMESTATE.active_queue_index + 1) % GAMESTATE.queue_configs.length;
-        GAMESTATE.queue_runs_on_current = 0;
+        advanceToNextRunnableQueue();
     }
 
     loadActiveQueue();
+}
+
+// Advance active_queue_index to the next queue with repeat_count > 0, skipping
+// any set to 0. If every queue is 0 (all skipped), leave the index unchanged so
+// the cycle still has something to run rather than looping forever.
+function advanceToNextRunnableQueue() {
+    const n = GAMESTATE.queue_configs.length;
+    GAMESTATE.queue_runs_on_current = 0;
+    if (!GAMESTATE.queue_configs.some(q => Math.floor(q.repeat_count) > 0)) {
+        return;
+    }
+    for (let i = 0; i < n; i++) {
+        GAMESTATE.active_queue_index = (GAMESTATE.active_queue_index + 1) % n;
+        if (Math.floor(activeQueue()?.repeat_count ?? 0) > 0) {
+            break;
+        }
+    }
 }
 
 // Restart the cycle at the first queue (called on prestige).
@@ -1342,6 +1360,10 @@ function resetQueueCycleForPrestige() {
     saveActiveQueue();
     GAMESTATE.active_queue_index = 0;
     GAMESTATE.queue_runs_on_current = 0;
+    // If the first queue is set to skip (0), start at the next runnable one.
+    if (Math.floor(activeQueue()?.repeat_count ?? 0) <= 0) {
+        advanceToNextRunnableQueue();
+    }
     loadActiveQueue();
 }
 
@@ -1486,7 +1508,8 @@ export function setQueueRepeatCount(index: number, value: number) {
     if (!queue) {
         return;
     }
-    queue.repeat_count = Math.max(1, Math.floor(value));
+    // 0 is allowed and means "skip this queue in the cycle".
+    queue.repeat_count = Math.max(0, Math.floor(value));
     saveGame();
 }
 
