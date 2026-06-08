@@ -673,8 +673,14 @@ button.do-prestige {
     position: relative;
     height: 730px;
     width: 590px;
+    /* Never exceed the visible viewport, so on short screens (e.g. a phone in
+       landscape) the box shrinks and its inner .scroll-area scrolls all content
+       into reach instead of the bottom spilling below the screen. dvh tracks the
+       dynamic viewport (excludes mobile browser chrome) where vh would not. */
+    max-height: calc(100dvh - 16px);
+    max-width: calc(100vw - 16px);
     padding: 0;
-    
+
     scrollbar-color: var(--element-foreground-color) var(--element-foreground-color-brighter); /* Firefox */
 }
 
