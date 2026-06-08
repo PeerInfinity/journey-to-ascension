@@ -31,7 +31,6 @@ export function isManagedMode() {
     return _managed_mode;
 }
 const ZONE_SPEEDUP_BASE = 1.05;
-export const BOSS_MAX_ENERGY_DISPARITY = 5;
 const STARTING_ENERGY = 100;
 const DEFAULT_TICK_RATE = 66.6;
 export const SAVE_VERSION = "1.8.0";
@@ -502,6 +501,14 @@ function applyFinishTaskRepEffects(task) {
         disableItemUndo();
     }
 }
+// The most a Boss's energy cost may exceed your current energy and still be
+// attemptable: the best item-based speedup that could bring it within reach. A
+// Scroll of Haste (HASTE_MULT) is always available; Bottled Lightning stacks on
+// top once you've obtained it. So the limit is HASTE_MULT, or HASTE_MULT *
+// BOTTLED_LIGHTNING_MULT (5 -> 10) after the first Bottled Lightning.
+export function getBossEnergyDisparityLimit() {
+    return HASTE_MULT * (knowsItem(ItemType.BottledLightning) ? BOTTLED_LIGHTNING_MULT : 1);
+}
 export function isTaskDisabledDueToTooStrongBoss(task) {
     if (task.progress > 0) {
         return false;
@@ -509,8 +516,11 @@ export function isTaskDisabledDueToTooStrongBoss(task) {
     if (task.task_definition.type != TaskType.Boss) {
         return false;
     }
-    const lightning = GAMESTATE.queued_lightning > 0 && task.task_definition.type == TaskType.Boss;
-    return calcTaskEnergyCost(task, GAMESTATE.queued_scrolls_of_haste > 0, lightning) > (GAMESTATE.current_energy * BOSS_MAX_ENERGY_DISPARITY);
+    // Compare the base cost (no queued items) against that best reduction, so a
+    // Boss is locked only if even Haste(+Lightning) couldn't bring it within
+    // current energy. Using base cost keeps the rule independent of what Items
+    // happen to be queued (which calcTaskEnergyCost would otherwise fold in).
+    return calcTaskEnergyCost(task, false, false) > (GAMESTATE.current_energy * getBossEnergyDisparityLimit());
 }
 export function isTaskDisabledDueToMissingItem(task) {
     if (isSingleTickTask(task)) {

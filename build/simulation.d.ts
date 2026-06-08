@@ -5,7 +5,6 @@ import { RenderEvent } from "./events.js";
 import { SkillType } from "./skills.js";
 import { PrestigeRepeatableType, PrestigeUnlockType, PrestigeLayer } from "./prestige_upgrades.js";
 export declare function isManagedMode(): boolean;
-export declare const BOSS_MAX_ENERGY_DISPARITY = 5;
 export declare const SAVE_VERSION = "1.8.0";
 export declare class Skill {
     type: SkillType;
@@ -27,6 +26,7 @@ export declare function calcTaskTicks(progress_per_tick: number, cost: number): 
 export declare function willCompleteAllRepsInOneTick(task: Task): boolean;
 export declare function applyTaskRepStartEffects(task: Task): void;
 export declare function clickTask(task: Task): void;
+export declare function getBossEnergyDisparityLimit(): number;
 export declare function isTaskDisabledDueToTooStrongBoss(task: Task): boolean;
 export declare function isTaskDisabledDueToMissingItem(task: Task): boolean;
 export declare function isTaskDisabledWithoutBeingFinished(task: Task): boolean;
