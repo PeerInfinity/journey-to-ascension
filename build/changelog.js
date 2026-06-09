@@ -5,6 +5,37 @@ export class ChangelogEntry {
 }
 export const CHANGELOG = [
     {
+        version: "Fork 1.3",
+        date: "2026-06-09",
+        changes: "- Added Auto Bottled Lightning (Advanced Automation): automatically spends a held Bottled Lightning on a Boss rep you couldn't otherwise afford. With Auto Scroll of Haste also on, Lightning is applied first<br>"
+            + "- Bosses too strong to attempt now unlock at 10x your current Energy (up from 5x) once you've obtained Bottled Lightning<br>"
+            + "- A queue's repeat count can now be 0, which skips that queue in the cycle<br>"
+            + "- Auto Scroll of Haste now also fires on Tasks you start manually, not just automated ones<br>"
+            + "- Mastery of Time no longer auto-completes scheduled artifact Tasks or injected Tasks, and queued Artifact effects are no longer wasted on them<br>"
+            + "- Fixed popups (Divinity, Settings, etc.) getting cut off on short screens, such as a phone in landscape<br>"
+    },
+    {
+        version: "Fork 1.2",
+        date: "2026-06-06",
+        changes: "- Added Queue Cycling: save multiple automation plans (\"queues\") and rotate through them, one or more per Energy Reset. Each queue has its own Task priorities, scheduled artifact Tasks, Item auto-use mode, repeat count, and optional name<br>"
+            + "- Per-queue Item auto-use: All, None, or Exclude (use everything except a chosen list). You can exclude Items you don't currently hold<br>"
+            + "- Reorder, rename, and add/remove queues; collapse the queue list; advance the cycle manually<br>"
+            + "- Added Priority Edit Mode: a frozen mode for arranging automation priorities, with navigation between Zones you've reached<br>"
+    },
+    {
+        version: "Fork 1.1",
+        date: "2026-06-06",
+        changes: "- Added Artifact Tasks: schedule \"Use &lt;Artifact&gt;\" as a Task at a point in a Zone, so automation can use Artifacts for you. Add or remove them via the Artifacts section of the Task list<br>"
+            + "- Added an option to only run artifact Tasks on Item (Auto Use Items) cycles, so they're skipped on banking cycles<br>"
+    },
+    {
+        version: "Fork 1.0",
+        date: "2026-06-04",
+        changes: "- These \"Fork\" versions are additions in the Archipelago-CC fork, listed separately from the upstream versions below<br>"
+            + "- Added a Game Mods section in Settings: Award Spark on Discovery (with a configurable fraction), Force Automation, Auto-Continue Energy Reset, and Suppress Prestige Popup<br>"
+            + "- Added an Advanced Automation panel: Resume on Reset, Auto Scroll of Haste (auto-spend Scrolls on reps you couldn't otherwise afford), Auto Use Cycle (alternate banking and spending Items across Energy Resets), and Use Free Items<br>"
+    },
+    {
         version: "1.1.1",
         date: "2026-04-12",
         changes: "- Fixed Minor Time Compression's single-tick Task effect not working<br>"
