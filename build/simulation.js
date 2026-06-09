@@ -33,7 +33,12 @@ export function isManagedMode() {
 const ZONE_SPEEDUP_BASE = 1.05;
 const STARTING_ENERGY = 100;
 const DEFAULT_TICK_RATE = 66.6;
-export const SAVE_VERSION = "1.8.0";
+// The fork's save format diverged from upstream's (added queue_configs,
+// artifact_tasks, mods, etc.), so this tracks the fork changelog rather than
+// upstream's save version. The Changelog popup checks SAVE_VERSION against the
+// newest CHANGELOG entry, so keep this equal to CHANGELOG[0].version — bump both
+// together when adding a fork changelog entry.
+export const SAVE_VERSION = "Fork 1.3";
 const TASK_STARTED_PROGRESS = 0.01;
 // Player-scheduled "use this artifact here" tasks get ids in this range — well
 // above zone task ids and the host's synthetic exit tasks (>= 10000) — so they
