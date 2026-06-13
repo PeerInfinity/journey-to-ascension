@@ -2588,8 +2588,14 @@ export class Gamestate {
     }
 
     public initialize() {
-        resetTasks();
+        // Skills must be initialized before resetTasks(): resetTasks() runs
+        // updateEnabledTasks(), which evaluates task progress multipliers via
+        // getSkill(). With the old order, GAMESTATE.skills was still empty at
+        // that point, so every lookup logged "Couldn't find skill" (~32 errors
+        // on a fresh start / every managed-mode boot). initializeSkills() has
+        // no dependency on tasks, so it is safe to run first.
         initializeSkills();
+        resetTasks();
         GAMESTATE.save_version = SAVE_VERSION;
         applyMods();
     }
