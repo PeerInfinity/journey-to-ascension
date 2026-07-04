@@ -2762,7 +2762,7 @@ function setupAutoFillControl(content: Element) {
         flashMessage(`Auto-filled priorities for Zones 1-${GAMESTATE.highest_zone + 1}.`);
     });
     setupTooltip(button, () => "Auto-Fill Priorities", () =>
-        "Overwrite ALL reached Zones' automation priorities with a heuristic order: Item-awarding Tasks first, then Prestige Tasks (cheap, one-shot, and the fresh Items boost them), then Task-unlockers, then Perk Tasks (cheapest to finish first), then the rest by skill levels per Energy, with Mandatory and Travel last. Combine with Energy Thresholds to skip whatever isn't currently worth running, and Edit Priorities for touch-ups. Newly unlocked or newly reached content isn't added automatically — click again to include it.");
+        "Overwrite ALL reached Zones' automation priorities with a heuristic order: Item-awarding Tasks first, then unearned Perk Tasks (cheapest to finish first), then Prestige Tasks (cheap, one-shot, and the fresh Items boost them), then Task-unlockers, then the rest by skill levels per Energy, with Mandatory and Travel last. Combine with Energy Thresholds to skip whatever isn't currently worth running, and Edit Priorities for touch-ups. Newly unlocked or newly reached content isn't added automatically — click again to include it.");
 }
 
 // Auto-Prioritize (Game Mod): the autopilot form of Auto-Fill Priorities.

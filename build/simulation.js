@@ -2029,13 +2029,14 @@ export function toggleAutomation(task) {
 }
 // MARK: Auto-Fill Priorities (Game Mod)
 // Heuristic order groups for autoFillPriorities; lower group runs earlier.
-// Resources first; then Prestige tasks — one-shot, cheap for their zone, and
-// completing them early gives prestige availability (plus discovery spark
-// every run with that mod), while the just-collected items boost the attempt
-// (user-reported: Touch the Divine belongs right after Infuse Mystic
-// Incense, not down with the Mandatory tasks); then opening the task graph,
-// then perks, then pure XP by yield, with Mandatory and Travel at the end —
-// the same travel-last invariant toggleAutomation maintains.
+// Resources first; then unearned perks — the frontier value; the threshold
+// filter handles skipping ones that aren't currently worth it (user ruling);
+// then Prestige tasks — one-shot, cheap for their zone, and completing them
+// early gives prestige availability (plus discovery spark every run with
+// that mod), while the collected items boost the attempt; then opening the
+// task graph, then pure XP by yield. Earned perks demote to the plain group,
+// BELOW prestige (user ruling). Mandatory and Travel close the list — the
+// same travel-last invariant toggleAutomation maintains.
 function autoFillGroup(def) {
     if (def.type == TaskType.Travel) {
         return 6;
@@ -2046,16 +2047,16 @@ function autoFillGroup(def) {
     if (def.item != ItemType.Count) {
         return 0;
     }
-    if (def.type == TaskType.Prestige) {
+    // Like getThresholdCategory, perk/unlocker grouping tracks live state:
+    // once the perk is earned or the target unlocked, the task sorts as a
+    // plain XP task (by yield) instead of keeping its spent purpose slot.
+    if (def.perk != PerkType.Count && !hasPerk(def.perk)) {
         return 1;
     }
-    // Like getThresholdCategory, unlocker/perk grouping tracks live state:
-    // once the target is unlocked or the perk earned, the task sorts as a
-    // plain XP task (by yield) instead of keeping its spent purpose slot.
-    if (def.unlocks_task >= 0 && !GAMESTATE.unlocked_tasks.includes(def.unlocks_task)) {
+    if (def.type == TaskType.Prestige) {
         return 2;
     }
-    if (def.perk != PerkType.Count && !hasPerk(def.perk)) {
+    if (def.unlocks_task >= 0 && !GAMESTATE.unlocked_tasks.includes(def.unlocks_task)) {
         return 3;
     }
     return 4;
@@ -2077,7 +2078,7 @@ export function autoFillPriorities(zone_id) {
         const task = live ?? new Task(def);
         const group = autoFillGroup(def);
         let metric = 0;
-        if (group == 3) {
+        if (group == 1) {
             // Perk tasks: cheapest-to-finish first, so reachable perks come early.
             metric = calcTaskEnergyCost(task, false, false) * Math.max(1, def.max_reps - task.reps);
         }
