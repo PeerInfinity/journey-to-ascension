@@ -103,8 +103,12 @@ export interface RunTaskRecord {
     completed: boolean;
 }
 export type ThresholdCategory = "perk_affordable" | "perk_unaffordable" | "item" | "progression" | "unlocker" | "other";
+export declare const THRESHOLD_METRIC_LEVEL = 0;
+export declare const THRESHOLD_METRIC_REP = 1;
+export declare const THRESHOLD_METRIC_RESETS = 2;
 export declare function getThresholdCategory(task: Task): ThresholdCategory;
 export declare function isThresholdSkipped(task: Task): boolean;
+export declare function estimateResetsToComplete(task: Task, max_resets: number): number;
 export declare enum AutomationMode {
     All = 0,
     Zone = 1,
@@ -160,22 +164,28 @@ export interface GameMods {
     threshold_end_run: boolean;
     threshold_perk_affordable_enabled: boolean;
     threshold_perk_affordable_pct: number;
-    threshold_perk_affordable_absolute: boolean;
+    threshold_perk_affordable_metric: number;
+    threshold_perk_affordable_resets: number;
     threshold_perk_unaffordable_enabled: boolean;
     threshold_perk_unaffordable_pct: number;
-    threshold_perk_unaffordable_absolute: boolean;
+    threshold_perk_unaffordable_metric: number;
+    threshold_perk_unaffordable_resets: number;
     threshold_item_enabled: boolean;
     threshold_item_pct: number;
-    threshold_item_absolute: boolean;
+    threshold_item_metric: number;
+    threshold_item_resets: number;
     threshold_progression_enabled: boolean;
     threshold_progression_pct: number;
-    threshold_progression_absolute: boolean;
+    threshold_progression_metric: number;
+    threshold_progression_resets: number;
     threshold_unlocker_enabled: boolean;
     threshold_unlocker_pct: number;
-    threshold_unlocker_absolute: boolean;
+    threshold_unlocker_metric: number;
+    threshold_unlocker_resets: number;
     threshold_other_enabled: boolean;
     threshold_other_pct: number;
-    threshold_other_absolute: boolean;
+    threshold_other_metric: number;
+    threshold_other_resets: number;
 }
 export declare function defaultMods(): GameMods;
 export declare function getMods(): GameMods;

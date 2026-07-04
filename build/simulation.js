@@ -1695,14 +1695,19 @@ function buildRingPlan() {
         .sort((a, b) => b.extra_levels_if_ringed - a.extra_levels_if_ringed)
         .map((r) => runTaskKey(r.zone_id, r.task_id));
 }
+// Per-category judgment metric for the threshold filter.
+export const THRESHOLD_METRIC_LEVEL = 0; // % of max energy per skill level earned ("worth it as XP?")
+export const THRESHOLD_METRIC_REP = 1; // % of max energy per rep ("can I afford it?")
+export const THRESHOLD_METRIC_RESETS = 2; // energy resets until fully completable ("reachable soon?")
 const THRESHOLD_MOD_KEYS = {
-    perk_affordable: { enabled: "threshold_perk_affordable_enabled", pct: "threshold_perk_affordable_pct", absolute: "threshold_perk_affordable_absolute" },
-    perk_unaffordable: { enabled: "threshold_perk_unaffordable_enabled", pct: "threshold_perk_unaffordable_pct", absolute: "threshold_perk_unaffordable_absolute" },
-    item: { enabled: "threshold_item_enabled", pct: "threshold_item_pct", absolute: "threshold_item_absolute" },
-    progression: { enabled: "threshold_progression_enabled", pct: "threshold_progression_pct", absolute: "threshold_progression_absolute" },
-    unlocker: { enabled: "threshold_unlocker_enabled", pct: "threshold_unlocker_pct", absolute: "threshold_unlocker_absolute" },
-    other: { enabled: "threshold_other_enabled", pct: "threshold_other_pct", absolute: "threshold_other_absolute" },
+    perk_affordable: { enabled: "threshold_perk_affordable_enabled", pct: "threshold_perk_affordable_pct", metric: "threshold_perk_affordable_metric", resets: "threshold_perk_affordable_resets" },
+    perk_unaffordable: { enabled: "threshold_perk_unaffordable_enabled", pct: "threshold_perk_unaffordable_pct", metric: "threshold_perk_unaffordable_metric", resets: "threshold_perk_unaffordable_resets" },
+    item: { enabled: "threshold_item_enabled", pct: "threshold_item_pct", metric: "threshold_item_metric", resets: "threshold_item_resets" },
+    progression: { enabled: "threshold_progression_enabled", pct: "threshold_progression_pct", metric: "threshold_progression_metric", resets: "threshold_progression_resets" },
+    unlocker: { enabled: "threshold_unlocker_enabled", pct: "threshold_unlocker_pct", metric: "threshold_unlocker_metric", resets: "threshold_unlocker_resets" },
+    other: { enabled: "threshold_other_enabled", pct: "threshold_other_pct", metric: "threshold_other_metric", resets: "threshold_other_resets" },
 };
+const THRESHOLD_CATEGORY_LIST = ["perk_affordable", "perk_unaffordable", "item", "progression", "unlocker", "other"];
 export function getThresholdCategory(task) {
     const def = task.task_definition;
     if (def.perk != PerkType.Count && !hasPerk(def.perk)) {
@@ -1755,13 +1760,14 @@ function isPerkTaskAffordableThisCycle(task) {
     }
     return total <= GAMESTATE.current_energy;
 }
-// Game Mod — energy thresholds. A prioritized task is skipped when it costs
-// more than the configured percentage of max energy, where "costs" is one of
-// two per-category metrics: energy per skill level earned (the default for
-// XP-valued categories), or the rep's absolute energy (default for
-// progression — see below). Each category has its own threshold, metric
-// toggle, and enable toggle; a disabled category is EXEMPT (its tasks always
-// run). Synthetic and skill-less tasks are always exempt.
+// Game Mod — energy thresholds. A prioritized task is skipped when it fails
+// its category's judgment, one of three per-category metrics: energy per
+// skill level earned vs a % of max energy (default for XP-valued
+// categories), the rep's absolute energy vs that % (default for progression
+// — see below), or the estimated energy resets until fully completable vs a
+// max-resets count. Each category has its own values, metric switch, and
+// enable toggle; a disabled category is EXEMPT (its tasks always run).
+// Synthetic and skill-less tasks are always exempt.
 export function isThresholdSkipped(task) {
     if (!GAMESTATE.mods.threshold_master) {
         return false;
@@ -1774,15 +1780,22 @@ export function isThresholdSkipped(task) {
     if (!GAMESTATE.mods[keys.enabled]) {
         return false;
     }
+    const metric = GAMESTATE.mods[keys.metric];
+    // Resets mode: skip unless the task could be fully completed within the
+    // configured number of energy resets, per the grind estimate below.
+    if (metric == THRESHOLD_METRIC_RESETS) {
+        const max_resets = Math.max(0, Math.floor(GAMESTATE.mods[keys.resets]));
+        return estimateResetsToComplete(task, max_resets) > max_resets;
+    }
     const threshold_pct = GAMESTATE.mods[keys.pct];
     const budget = (threshold_pct / 100) * GAMESTATE.max_energy;
     const cost = calcTaskEnergyCost(task, false, false);
-    // Absolute mode: judge the rep's total energy cost. The default for
+    // Rep mode: judge the rep's total energy cost. The default for
     // progression (Travel/Mandatory/Prestige), whose value is progression,
     // not XP — a per-level metric inevitably explodes once the task's skill
     // outgrows early-zone XP (a farmed-up Charisma made zone 1's Travel task
     // look infinitely expensive per level and stranded the run).
-    if (GAMESTATE.mods[keys.absolute]) {
+    if (metric == THRESHOLD_METRIC_REP) {
         return cost > budget;
     }
     const expected_levels = calcExpectedLevels(task);
@@ -1790,6 +1803,61 @@ export function isThresholdSkipped(task) {
         return true;
     }
     return cost / expected_levels > budget;
+}
+// Estimate how many energy resets it would take until this task could be
+// fully completed (all remaining reps in one go), assuming conditions like
+// right now repeat each reset: the same energy budget (current remaining
+// energy — evaluated at skip-decision time, per design), the same non-level
+// speed boosts (items/perks/power as currently active), and every simulated
+// run grinding its whole budget into this one task. Only skill XP persists
+// across resets (progress and reps do not), which is exactly what the grind
+// accumulates. Returns 0 if completable right now, otherwise the number of
+// resets needed, or max_resets + 1 if not reachable within max_resets —
+// which caps the iteration count, so the estimate is O(max_resets).
+export function estimateResetsToComplete(task, max_resets) {
+    const def = task.task_definition;
+    if (def.skills.length == 0) {
+        return 0; // no skills to grow; either affordable now or never — treat as now
+    }
+    const cost = calcTaskCost(task);
+    const budget = GAMESTATE.current_energy;
+    // Split the live progress multiplier into its level part (uniform
+    // 1.01^level, geometric-meaned across skills = 1.01^(mean level)) and
+    // everything else, held constant during the simulation.
+    const mean_level = def.skills.reduce((sum, s) => sum + getSkill(s).level, 0) / def.skills.length;
+    const base_mult = calcTaskProgressMultiplier(task) / Math.pow(1.01, mean_level);
+    const sim = def.skills.map((s) => ({ type: s, level: getSkill(s).level, progress: getSkill(s).progress }));
+    for (let resets = 0; resets <= max_resets; resets++) {
+        const sim_mean = sim.reduce((sum, x) => sum + x.level, 0) / sim.length;
+        const progress_per_tick = base_mult * Math.pow(1.01, sim_mean);
+        const drain = calcEnergyDrainPerTick(task, isSingleTickTaskImpl(progress_per_tick, cost));
+        // Reps done this run survive until the reset wipes them, so run 0
+        // only needs the remaining reps; later runs start from zero.
+        const reps = resets == 0 ? Math.max(1, def.max_reps - task.reps) : def.max_reps;
+        const energy_to_complete = calcTaskTicks(progress_per_tick, cost) * drain * reps;
+        if (energy_to_complete <= budget) {
+            return resets;
+        }
+        // Grind this run's whole budget into the task; XP is linear in the
+        // progress achieved. Level-ups during the run would speed it up
+        // further, so this is a (slightly) conservative estimate.
+        const ticks = Math.floor(budget / drain);
+        const progress = Math.min(ticks * progress_per_tick, cost * reps);
+        const xp = calcSkillXp(task, progress, true);
+        if (xp <= 0) {
+            break; // can't even tick once — no growth is coming, ever
+        }
+        for (const s of sim) {
+            s.progress += xp;
+            let needed = calcSkillXpNeededAtLevel(s.level, s.type);
+            while (s.progress >= needed) {
+                s.progress -= needed;
+                s.level += 1;
+                needed = calcSkillXpNeededAtLevel(s.level, s.type);
+            }
+        }
+    }
+    return max_resets + 1;
 }
 // Everything runnable was threshold-skipped. Automation would otherwise idle
 // forever — no running task means no energy drain, so the run never ends. If
@@ -2328,6 +2396,24 @@ function loadGameFromData(data) {
             queue.excluded_items = [];
         }
     }
+    // Migration: Fork 1.4 briefly shipped boolean threshold_*_absolute metric
+    // toggles, immediately generalized to the 3-way threshold_*_metric field.
+    // Map any saved legacy flag onto the new field (absent from such saves by
+    // definition) and drop it so it doesn't linger in the merged mods object.
+    if (GAMESTATE.mods) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const legacy_mods = GAMESTATE.mods;
+        for (const category of THRESHOLD_CATEGORY_LIST) {
+            const absolute_key = `threshold_${category}_absolute`;
+            const metric_key = `threshold_${category}_metric`;
+            if (absolute_key in legacy_mods) {
+                if (!(metric_key in legacy_mods)) {
+                    legacy_mods[metric_key] = legacy_mods[absolute_key] ? THRESHOLD_METRIC_REP : THRESHOLD_METRIC_LEVEL;
+                }
+                delete legacy_mods[absolute_key];
+            }
+        }
+    }
     // Merge mods over defaults so saves from before a given mod existed (or
     // from before mods at all) get safe values for any missing field.
     GAMESTATE.mods = { ...defaultMods(), ...(GAMESTATE.mods ?? {}) };
@@ -2360,22 +2446,28 @@ export function defaultMods() {
         threshold_end_run: false,
         threshold_perk_affordable_enabled: false,
         threshold_perk_affordable_pct: 100,
-        threshold_perk_affordable_absolute: false,
+        threshold_perk_affordable_metric: THRESHOLD_METRIC_LEVEL,
+        threshold_perk_affordable_resets: 3,
         threshold_perk_unaffordable_enabled: false,
         threshold_perk_unaffordable_pct: 25,
-        threshold_perk_unaffordable_absolute: false,
+        threshold_perk_unaffordable_metric: THRESHOLD_METRIC_LEVEL,
+        threshold_perk_unaffordable_resets: 3,
         threshold_item_enabled: false,
         threshold_item_pct: 50,
-        threshold_item_absolute: false,
+        threshold_item_metric: THRESHOLD_METRIC_LEVEL,
+        threshold_item_resets: 3,
         threshold_progression_enabled: false,
         threshold_progression_pct: 100,
-        threshold_progression_absolute: true,
+        threshold_progression_metric: THRESHOLD_METRIC_REP,
+        threshold_progression_resets: 3,
         threshold_unlocker_enabled: false,
         threshold_unlocker_pct: 50,
-        threshold_unlocker_absolute: false,
+        threshold_unlocker_metric: THRESHOLD_METRIC_LEVEL,
+        threshold_unlocker_resets: 3,
         threshold_other_enabled: false,
         threshold_other_pct: 10,
-        threshold_other_absolute: false,
+        threshold_other_metric: THRESHOLD_METRIC_LEVEL,
+        threshold_other_resets: 3,
     };
 }
 export function getMods() {

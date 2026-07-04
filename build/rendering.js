@@ -1,5 +1,5 @@
 import { Task, TaskDefinition, ZONES, TaskType, PERKS_BY_ZONE, ITEMS_BY_ZONE } from "./zones.js";
-import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, getBossEnergyDisparityLimit, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId, getQueueConfigs, getActiveQueueIndex, getQueueRunsOnCurrent, advanceQueueCycle, addQueue, removeQueue, setQueueAutoUseMode, getQueueExcludedItems, addQueueExcludedItem, removeQueueExcludedItem, setQueueRepeatCount, setQueueName, moveQueue, setActiveQueue, isEditMode, enterEditMode, exitEditMode, setEditZone, getEditMaxZone, autoFillAllPriorities } from "./simulation.js";
+import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, getBossEnergyDisparityLimit, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId, getQueueConfigs, getActiveQueueIndex, getQueueRunsOnCurrent, advanceQueueCycle, addQueue, removeQueue, setQueueAutoUseMode, getQueueExcludedItems, addQueueExcludedItem, removeQueueExcludedItem, setQueueRepeatCount, setQueueName, moveQueue, setActiveQueue, isEditMode, enterEditMode, exitEditMode, setEditZone, getEditMaxZone, autoFillAllPriorities, THRESHOLD_METRIC_REP, THRESHOLD_METRIC_RESETS } from "./simulation.js";
 import { GAMESTATE, RENDERING, resetSave } from "./game.js";
 import { ItemType, ItemDefinition, ITEMS, HASTE_MULT, ARTIFACTS, MAGIC_RING_MULT, BOTTLED_LIGHTNING_MULT } from "./items.js";
 import { PerkDefinition, PerkType, PERKS, getPerkNameWithEmoji } from "./perks.js";
@@ -2163,53 +2163,61 @@ function setupEditPrioritiesControl(content) {
     });
     setupTooltip(button, () => editing ? "Done editing" : "Edit priorities", () => "Browse the zones you've reached and set Task automation priorities for each, without anything running. Requires no Task to be in progress.");
 }
-// Energy Thresholds (Game Mod): skip prioritized Tasks that cost more than a
-// per-category percentage of max Energy — judged per skill level earned
-// (/lvl) or per rep (/rep), switchable per row. One row per category: a
-// toggle (Off = that category is exempt and always runs), the metric switch,
-// and the percentage. Categories match getThresholdCategory's precedence.
+// Energy Thresholds (Game Mod): skip prioritized Tasks that fail a
+// per-category judgment — Energy per skill level earned (/lvl), the rep's
+// total Energy (/rep), or estimated Energy Resets until fully completable
+// (/rst), switchable per row. One row per category: a toggle (Off = that
+// category is exempt and always runs), the metric switch, and the value (a
+// percentage of max Energy for /lvl and /rep, a reset count for /rst).
+// Categories match getThresholdCategory's precedence.
 const THRESHOLD_ROWS = [
     {
         label: "New Perk (finishable)",
         tooltip: "Tasks that award a Perk you haven't earned this Prestige, when finishing all remaining reps fits in your current Energy — counting the speed-up your held Scrolls of Haste (and, for Bosses, Bottled Lightning) could provide.",
         enabled: "threshold_perk_affordable_enabled",
         pct: "threshold_perk_affordable_pct",
-        absolute: "threshold_perk_affordable_absolute",
+        metric: "threshold_perk_affordable_metric",
+        resets: "threshold_perk_affordable_resets",
     },
     {
         label: "New Perk (out of reach)",
         tooltip: "Tasks that award a Perk you haven't earned this Prestige, when finishing all remaining reps does NOT fit in your current Energy, even counting your Artifacts' speed-ups.",
         enabled: "threshold_perk_unaffordable_enabled",
         pct: "threshold_perk_unaffordable_pct",
-        absolute: "threshold_perk_unaffordable_absolute",
+        metric: "threshold_perk_unaffordable_metric",
+        resets: "threshold_perk_unaffordable_resets",
     },
     {
         label: "Awards an Item",
         tooltip: "Tasks that award an Item on each rep (and don't award an unearned Perk).",
         enabled: "threshold_item_enabled",
         pct: "threshold_item_pct",
-        absolute: "threshold_item_absolute",
+        metric: "threshold_item_metric",
+        resets: "threshold_item_resets",
     },
     {
         label: "Progression",
         tooltip: "Travel, Mandatory, and Prestige Tasks — the ones required to reach the next Zone. Defaults to per-rep judgment: their value is progression, not XP, and a high skill level would make Energy-per-level explode and strand the run.",
         enabled: "threshold_progression_enabled",
         pct: "threshold_progression_pct",
-        absolute: "threshold_progression_absolute",
+        metric: "threshold_progression_metric",
+        resets: "threshold_progression_resets",
     },
     {
         label: "Unlocks a Task",
         tooltip: "Tasks that unlock another Task when finished (and fit no earlier category).",
         enabled: "threshold_unlocker_enabled",
         pct: "threshold_unlocker_pct",
-        absolute: "threshold_unlocker_absolute",
+        metric: "threshold_unlocker_metric",
+        resets: "threshold_unlocker_resets",
     },
     {
         label: "Everything else",
         tooltip: "Tasks that fit none of the other categories.",
         enabled: "threshold_other_enabled",
         pct: "threshold_other_pct",
-        absolute: "threshold_other_absolute",
+        metric: "threshold_other_metric",
+        resets: "threshold_other_resets",
     },
 ];
 function setupThresholdControls(content) {
@@ -2221,7 +2229,7 @@ function setupThresholdControls(content) {
         setMod("threshold_master", !GAMESTATE.mods.threshold_master);
         setupControls(); // rebuild: shows/hides the per-category rows
     });
-    setupTooltip(master, () => `Energy Thresholds: ${GAMESTATE.mods.threshold_master ? "On" : "Off"}`, () => "Skip prioritized Tasks that cost more than the category's percentage of your max Energy. Each category picks its metric: /lvl (Energy per skill level earned — \"worth it as XP?\") or /rep (the rep's total Energy — \"can I afford it?\"). Progression defaults to /rep, since its value isn't XP. Each category can be toggled off to exempt it — its Tasks then always run.");
+    setupTooltip(master, () => `Energy Thresholds: ${GAMESTATE.mods.threshold_master ? "On" : "Off"}`, () => "Skip prioritized Tasks that fail their category's judgment. Each category picks its metric: /lvl (Energy per skill level earned vs a % of max Energy — \"worth it as XP?\"), /rep (the rep's total Energy vs that % — \"can I afford it?\"), or /rst (estimated Energy Resets until fully completable vs a count — \"reachable soon?\"). Progression defaults to /rep, since its value isn't XP. Each category can be toggled off to exempt it — its Tasks then always run.");
     if (!on) {
         return;
     }
@@ -2249,27 +2257,45 @@ function setupThresholdControls(content) {
             setMod(row.enabled, !isModEnabled(row.enabled));
             refresh();
         });
-        setupTooltip(button, () => `${row.label}: ${isModEnabled(row.enabled) ? "On" : "Off"}`, () => `${row.tooltip}<br><br>On: skip these Tasks when ${isModEnabled(row.absolute) ? "one rep" : "one skill level"} costs more than the set percentage of max Energy. Off: these Tasks are exempt and always run.`);
+        const metric = GAMESTATE.mods[row.metric];
+        const skip_when = metric == THRESHOLD_METRIC_RESETS ? "completing it would take more Energy Resets than the set count"
+            : metric == THRESHOLD_METRIC_REP ? "one rep costs more than the set percentage of max Energy"
+                : "one skill level costs more than the set percentage of max Energy";
+        setupTooltip(button, () => `${row.label}: ${isModEnabled(row.enabled) ? "On" : "Off"}`, () => `${row.tooltip}<br><br>On: skip these Tasks when ${skip_when}. Off: these Tasks are exempt and always run.`);
         const mode_button = createChildElement(row_div, "button");
         mode_button.classList.add("threshold-mode");
-        function refreshMode() {
-            mode_button.textContent = isModEnabled(row.absolute) ? "/rep" : "/lvl";
-        }
-        refreshMode();
+        mode_button.textContent =
+            metric == THRESHOLD_METRIC_RESETS ? "/rst"
+                : metric == THRESHOLD_METRIC_REP ? "/rep"
+                    : "/lvl";
         mode_button.addEventListener("click", () => {
-            setMod(row.absolute, !isModEnabled(row.absolute));
-            refreshMode();
+            setMod(row.metric, (metric + 1) % 3);
+            setupControls(); // rebuild: the value input's meaning and range change with the metric
         });
-        setupTooltip(mode_button, () => `Metric: % of max Energy ${isModEnabled(row.absolute) ? "per rep" : "per skill level"}`, () => "What the percentage measures for this category.<br><br>/lvl: Energy one rep costs divided by the skill levels it would earn — \"is this worth the Energy as XP?\". Beware on progression-style Tasks: a high skill level makes this explode.<br>/rep: the rep's total Energy cost — \"can I afford to just do this?\".");
-        createNumericInput(row_div, {
-            min: 1,
-            max: 1000,
-            initialValue: GAMESTATE.mods[row.pct],
-            ariaLabel: `${row.label} threshold, % of max Energy per skill level`,
-            onChange: (value) => {
-                setMod(row.pct, value);
-            },
-        });
+        setupTooltip(mode_button, () => metric == THRESHOLD_METRIC_RESETS ? "Metric: Energy Resets to complete"
+            : `Metric: % of max Energy ${metric == THRESHOLD_METRIC_REP ? "per rep" : "per skill level"}`, () => "What this category's number measures. Click to cycle.<br><br>/lvl: Energy one rep costs divided by the skill levels it would earn — \"is this worth the Energy as XP?\". Beware on progression-style Tasks: a high skill level makes this explode.<br>/rep: the rep's total Energy cost — \"can I afford to just do this?\".<br>/rst: how many Energy Resets it would take until the Task could be fully completed, assuming runs like right now (current remaining Energy and boosts) spent grinding it — \"is this reachable soon?\". 0 means it must be completable this run.");
+        if (metric == THRESHOLD_METRIC_RESETS) {
+            createNumericInput(row_div, {
+                min: 0,
+                max: 99,
+                initialValue: GAMESTATE.mods[row.resets],
+                ariaLabel: `${row.label} threshold, max Energy Resets to complete`,
+                onChange: (value) => {
+                    setMod(row.resets, value);
+                },
+            });
+        }
+        else {
+            createNumericInput(row_div, {
+                min: 1,
+                max: 1000,
+                initialValue: GAMESTATE.mods[row.pct],
+                ariaLabel: `${row.label} threshold, % of max Energy ${metric == THRESHOLD_METRIC_REP ? "per rep" : "per skill level"}`,
+                onChange: (value) => {
+                    setMod(row.pct, value);
+                },
+            });
+        }
     }
 }
 // Auto-Fill Priorities: one click overwrites every reached zone's priority

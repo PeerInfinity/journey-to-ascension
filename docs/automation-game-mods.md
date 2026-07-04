@@ -84,17 +84,29 @@ Auto-use of Artifacts is deliberately **not** applied to synthetic tasks
 ## How the Energy Thresholds decide
 
 With **Energy Thresholds** on, automation skips a prioritized task when it
-costs more than a percentage of your **max energy**, where each category picks
-what "costs" means via its **/lvl · /rep metric switch**:
+fails its category's judgment, where each category picks the judgment via its
+**/lvl · /rep · /rst metric switch**:
 
 - **/lvl** — the energy one rep costs, divided by the (fractional) skill
-  levels that rep would earn at your current skill state. The idea: "I'm
-  willing to spend at most T% of my max energy to earn one level from this
-  kind of task." Right for XP-valued tasks — but beware on purpose-driven
-  ones: once a skill far outlevels a task's XP, levels-per-rep tends to zero
-  and this metric explodes.
-- **/rep** — the rep's total energy cost: "don't do this if one rep costs
-  more than T% of my max energy." Right for tasks whose value isn't XP.
+  levels that rep would earn at your current skill state, vs a percentage of
+  **max energy**. The idea: "I'm willing to spend at most T% of my max energy
+  to earn one level from this kind of task." Right for XP-valued tasks — but
+  beware on purpose-driven ones: once a skill far outlevels a task's XP,
+  levels-per-rep tends to zero and this metric explodes.
+- **/rep** — the rep's total energy cost vs that percentage: "don't do this
+  if one rep costs more than T% of my max energy." Right for tasks whose
+  value isn't XP.
+- **/rst** — the estimated number of **energy resets** until the task could be
+  *fully completed* (all remaining reps in one go), vs a reset count: "skip
+  it if it isn't reachable within N resets." 0 means it must be completable
+  right now. The estimate assumes conditions like the moment of the decision
+  repeat each reset — the same remaining energy as the budget, the same
+  active boosts — and that each simulated run grinds its whole budget into
+  this one task (only skill XP survives a reset, which is what the grind
+  accumulates). Level-ups *during* a run aren't modeled, so the estimate is
+  slightly conservative; and because it uses *current remaining* energy, a
+  task can be within reach early in a run and out of reach late — which is
+  the point.
 
 One priority list then serves the whole prestige cycle — cheap tasks pass
 everywhere early after a prestige; late in a run only worthwhile tasks run.
@@ -150,8 +162,9 @@ a notification appears and automation idles.
 - **Cycles:** `applyResetCycle()` → `applyAutoUseCycle()` (and `applyQueueCycle()`).
 - **Free items:** `maybeUseRoundingErrorItem()`.
 - **Energy thresholds:** `isThresholdSkipped()` / `getThresholdCategory()` /
-  `calcExpectedLevels()` in `simulation.ts`; the skip hook and stall handling
-  in `pickNextTaskInAutomationQueue()`; UI in `setupThresholdControls()` +
-  `THRESHOLD_ROWS` (`rendering.ts`).
+  `calcExpectedLevels()` / `estimateResetsToComplete()` and the
+  `THRESHOLD_METRIC_*` constants in `simulation.ts`; the skip hook and stall
+  handling in `pickNextTaskInAutomationQueue()`; UI in
+  `setupThresholdControls()` + `THRESHOLD_ROWS` (`rendering.ts`).
 - **UI:** the Settings section and the `ADVANCED_AUTOMATION_TOGGLES` table +
   `setupAdvancedAutomationControls()` in `rendering.ts`.
