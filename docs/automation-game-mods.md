@@ -121,18 +121,24 @@ tasks always run.**
    could provide.
 2. **New Perk (out of reach)** — awards an unearned perk, but finishing it does
    *not* fit this cycle even with your Artifacts.
-3. **Awards an Item** — grants an Item on each rep.
-4. **Progression** — Travel, Mandatory, and Prestige tasks. Avoid /lvl here:
+3. **Unlocks a Task** — its unlock target is still locked. Checked *before*
+   the item category deliberately: every unlocker in the game is a Boss that
+   also awards an item, so the other order would leave this category
+   permanently empty. Unlocks persist across energy resets (until prestige).
+4. **Awards an Item** — grants an Item on each rep.
+5. **Progression** — Travel, Mandatory, and Prestige tasks. Avoid /lvl here:
    their value is progression, not XP, and the /lvl metric explodes once the
    task's skill outlevels early-zone XP — a farmed-up skill would make an old
    zone's Travel task look infinitely expensive per level and strand the run
    there.
-5. **Unlocks a Task** — finishing it unlocks another task.
 6. **Everything else.**
 
-A task can migrate between the two perk categories mid-run as your energy and
-Artifacts change; once its perk is earned it drops to whichever later category
-fits. Synthetic tasks and skill-less tasks are always exempt.
+Categories track live state, so tasks migrate as their purpose is spent: the
+two perk categories swap with your energy and Artifacts, an earned perk drops
+the task to whichever later category fits, and a completed unlock turns its
+Boss into a plain item farm (first kill of a prestige judges as "Unlocks a
+Task", every later kill as "Awards an Item"). Synthetic tasks and skill-less
+tasks are always exempt.
 
 Threshold skipping always *skips* (it never pauses automation, regardless of
 the Skip/Pause on Blocked Tasks setting). If **everything** left is skipped,

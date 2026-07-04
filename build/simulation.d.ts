@@ -102,7 +102,7 @@ export interface RunTaskRecord {
     extra_levels_if_ringed: number;
     completed: boolean;
 }
-export type ThresholdCategory = "perk_affordable" | "perk_unaffordable" | "item" | "progression" | "unlocker" | "other";
+export type ThresholdCategory = "perk_affordable" | "perk_unaffordable" | "unlocker" | "item" | "progression" | "other";
 export declare const THRESHOLD_METRIC_LEVEL = 0;
 export declare const THRESHOLD_METRIC_REP = 1;
 export declare const THRESHOLD_METRIC_RESETS = 2;

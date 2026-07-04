@@ -2624,8 +2624,16 @@ const THRESHOLD_ROWS: { label: string; tooltip: string; enabled: keyof GameMods;
         resets: "threshold_perk_unaffordable_resets",
     },
     {
+        label: "Unlocks a Task",
+        tooltip: "Tasks whose unlock target you haven't unlocked yet — in practice, the Bosses that reveal a hidden follow-up Task. Once the unlock is done (unlocks persist across Energy Resets, until Prestige), the Task counts as an Item task instead.",
+        enabled: "threshold_unlocker_enabled",
+        pct: "threshold_unlocker_pct",
+        metric: "threshold_unlocker_metric",
+        resets: "threshold_unlocker_resets",
+    },
+    {
         label: "Awards an Item",
-        tooltip: "Tasks that award an Item on each rep (and don't award an unearned Perk).",
+        tooltip: "Tasks that award an Item on each rep (and don't award an unearned Perk or a still-locked unlock).",
         enabled: "threshold_item_enabled",
         pct: "threshold_item_pct",
         metric: "threshold_item_metric",
@@ -2638,14 +2646,6 @@ const THRESHOLD_ROWS: { label: string; tooltip: string; enabled: keyof GameMods;
         pct: "threshold_progression_pct",
         metric: "threshold_progression_metric",
         resets: "threshold_progression_resets",
-    },
-    {
-        label: "Unlocks a Task",
-        tooltip: "Tasks that unlock another Task when finished (and fit no earlier category).",
-        enabled: "threshold_unlocker_enabled",
-        pct: "threshold_unlocker_pct",
-        metric: "threshold_unlocker_metric",
-        resets: "threshold_unlocker_resets",
     },
     {
         label: "Everything else",

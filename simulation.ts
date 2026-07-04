@@ -2059,15 +2059,18 @@ function buildRingPlan() {
 
 // MARK: Energy Thresholds (Game Mod)
 
-// Category of a task for the energy-per-level threshold filter. First match
-// wins: a task that awards an unearned perk is judged as a perk task even if
-// it also awards an item, is a progression task, or unlocks another task.
+// Category of a task for the energy threshold filter. First match wins, and
+// the perk/unlocker categories track live state: a task counts as a perk
+// task only while its perk is unearned this prestige, and as an unlocker
+// only while its unlock target is still locked — afterwards it falls through
+// to the next matching category (for every current unlocker Boss: item).
+// Precedence: perk (affordable/not) > unlocker > item > progression > other.
 export type ThresholdCategory =
     | "perk_affordable"
     | "perk_unaffordable"
+    | "unlocker"
     | "item"
     | "progression"
-    | "unlocker"
     | "other";
 
 // Per-category judgment metric for the threshold filter.
@@ -2091,14 +2094,19 @@ export function getThresholdCategory(task: Task): ThresholdCategory {
     if (def.perk != PerkType.Count && !hasPerk(def.perk)) {
         return isPerkTaskAffordableThisCycle(task) ? "perk_affordable" : "perk_unaffordable";
     }
+    // Checked before the item branch: every unlocker in the game data is a
+    // Boss that also awards an item, so with item first this category would
+    // never match. While the unlock target is still locked the task judges
+    // as an unlocker; once unlocked (unlocks persist across energy resets,
+    // wiped on prestige) it drops through and counts as an item farm.
+    if (def.unlocks_task >= 0 && !GAMESTATE.unlocked_tasks.includes(def.unlocks_task)) {
+        return "unlocker";
+    }
     if (def.item != ItemType.Count) {
         return "item";
     }
     if (def.type == TaskType.Travel || def.type == TaskType.Mandatory || def.type == TaskType.Prestige) {
         return "progression";
-    }
-    if (def.unlocks_task >= 0) {
-        return "unlocker";
     }
     return "other";
 }
@@ -2409,10 +2417,13 @@ function autoFillGroup(def: TaskDefinition): number {
     if (def.item != ItemType.Count) {
         return 0;
     }
-    if (def.unlocks_task >= 0) {
+    // Like getThresholdCategory, unlocker/perk grouping tracks live state:
+    // once the target is unlocked or the perk earned, the task sorts as a
+    // plain XP task (by yield) instead of keeping its spent purpose slot.
+    if (def.unlocks_task >= 0 && !GAMESTATE.unlocked_tasks.includes(def.unlocks_task)) {
         return 1;
     }
-    if (def.perk != PerkType.Count) {
+    if (def.perk != PerkType.Count && !hasPerk(def.perk)) {
         return 2;
     }
     return 3;
