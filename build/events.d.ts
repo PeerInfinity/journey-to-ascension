@@ -20,7 +20,8 @@ export declare enum EventType {
     SkippedTasks = 14,
     UsedItems = 15,
     AwardedSparkOnDiscovery = 16,
-    Count = 17
+    ThresholdStall = 17,
+    Count = 18
 }
 export declare class EventContext {
 }

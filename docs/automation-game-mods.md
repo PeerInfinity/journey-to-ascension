@@ -32,6 +32,8 @@ save from before a mod existed simply gets that mod off.
 | **Auto Use Cycle** | Cycle item auto-use across Energy Resets: run N resets with Auto Use Items off (banking Items), then one with it on (spending the stockpile), and repeat. The off-count is configurable. |
 | **Use Free Items** | Even on cycles where Auto Use Items is off, use Items you can spend *without reducing how many you keep* on the next reset (the surplus left by keep-rounding). Artifacts are excluded. |
 | **Artifact Tasks: Item Cycles Only** | Only run scheduled artifact tasks while Auto Use Items is enabled (see [artifact-tasks.md](artifact-tasks.md)). |
+| **Energy Thresholds** | Skip prioritized tasks that aren't worth their energy — per-category energy-per-level thresholds; see below. |
+| **End Run When All Skipped** | (Under Energy Thresholds) When every remaining prioritized task is over its threshold, trigger the Energy Reset instead of idling. |
 
 > Note: **Auto Use Cycle** and **Queue Cycling** are mutually exclusive — at most
 > one per-reset cycle runs (see [queue-cycling.md](queue-cycling.md)).
@@ -51,6 +53,42 @@ first**, then Auto Scroll of Haste re-checks and only adds a Scroll if the rep i
 Auto-use of Artifacts is deliberately **not** applied to synthetic tasks
 (artifact tasks, host exit tasks) — see [balance-and-qol.md](balance-and-qol.md).
 
+## How the Energy Thresholds decide
+
+With **Energy Thresholds** on, automation skips a prioritized task when the
+energy one rep costs, divided by the (fractional) skill levels that rep would
+earn at your current skill state, exceeds a percentage of your **max energy**.
+The idea: "I'm willing to spend at most T% of my max energy to earn one level
+from this kind of task." One priority list then serves the whole prestige cycle
+— cheap tasks pass everywhere early after a prestige; late in a run only
+worthwhile tasks run.
+
+Each task is classified into exactly one category (first match wins), each with
+its own threshold percentage and toggle. **A disabled category is exempt — its
+tasks always run.**
+
+1. **New Perk (finishable)** — awards a perk you haven't earned this prestige,
+   and finishing all remaining reps fits in your current energy, counting the
+   speed-up your held Scrolls of Haste (and, for Bosses, Bottled Lightning)
+   could provide.
+2. **New Perk (out of reach)** — awards an unearned perk, but finishing it does
+   *not* fit this cycle even with your Artifacts.
+3. **Awards an Item** — grants an Item on each rep.
+4. **Progression** — Travel, Mandatory, and Prestige tasks.
+5. **Unlocks a Task** — finishing it unlocks another task.
+6. **Everything else.**
+
+A task can migrate between the two perk categories mid-run as your energy and
+Artifacts change; once its perk is earned it drops to whichever later category
+fits. Synthetic tasks and skill-less tasks are always exempt.
+
+Threshold skipping always *skips* (it never pauses automation, regardless of
+the Skip/Pause on Blocked Tasks setting). If **everything** left is skipped,
+automation would idle forever — no running task means no energy drain. With
+**End Run When All Skipped** on, that state triggers the Energy Reset instead
+(pairs well with Auto-Continue Energy Reset and Resume on Reset); with it off,
+a notification appears and automation idles.
+
 ## Code map
 
 - **State / defaults:** `GameMods` interface and `defaultMods()` in
@@ -59,5 +97,9 @@ Auto-use of Artifacts is deliberately **not** applied to synthetic tasks
   called from `applyTaskRepStartEffects()`.
 - **Cycles:** `applyResetCycle()` → `applyAutoUseCycle()` (and `applyQueueCycle()`).
 - **Free items:** `maybeUseRoundingErrorItem()`.
+- **Energy thresholds:** `isThresholdSkipped()` / `getThresholdCategory()` /
+  `calcExpectedLevels()` in `simulation.ts`; the skip hook and stall handling
+  in `pickNextTaskInAutomationQueue()`; UI in `setupThresholdControls()` +
+  `THRESHOLD_ROWS` (`rendering.ts`).
 - **UI:** the Settings section and the `ADVANCED_AUTOMATION_TOGGLES` table +
   `setupAdvancedAutomationControls()` in `rendering.ts`.

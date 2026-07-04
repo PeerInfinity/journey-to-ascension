@@ -5,7 +5,7 @@ import { RenderEvent } from "./events.js";
 import { SkillType } from "./skills.js";
 import { PrestigeRepeatableType, PrestigeUnlockType, PrestigeLayer } from "./prestige_upgrades.js";
 export declare function isManagedMode(): boolean;
-export declare const SAVE_VERSION = "Fork 1.3";
+export declare const SAVE_VERSION = "Fork 1.4";
 export declare class Skill {
     type: SkillType;
     level: number;
@@ -16,6 +16,7 @@ export declare class Skill {
 export declare function calcSkillXp(task: Task, task_progress: number, ignore_boost?: boolean): number;
 export declare function calcSkillXpNeeded(skill: Skill): number;
 export declare function calcSkillXpNeededAtLevel(level: number, skill_type: SkillType): number;
+export declare function calcExpectedLevels(task: Task): number;
 export declare function calcSkillTaskProgressMultiplierFromLevel(level: number): number;
 export declare function calcSkillTaskProgressWithoutLevel(skill_type: SkillType): number;
 export declare function calcSkillTaskProgressMultiplier(skill_type: SkillType): number;
@@ -95,6 +96,9 @@ export declare function calcAttunementGain(task: Task): number;
 export declare function calcAttunementSkills(): SkillType[];
 export declare function getPowerSkills(): SkillType[];
 export declare function getSpiteTheGodsSkills(): SkillType[];
+export type ThresholdCategory = "perk_affordable" | "perk_unaffordable" | "item" | "progression" | "unlocker" | "other";
+export declare function getThresholdCategory(task: Task): ThresholdCategory;
+export declare function isThresholdSkipped(task: Task): boolean;
 export declare enum AutomationMode {
     All = 0,
     Zone = 1,
@@ -140,6 +144,20 @@ export interface GameMods {
     auto_use_free_items: boolean;
     artifact_tasks_item_cycle_only: boolean;
     queue_cycle: boolean;
+    threshold_master: boolean;
+    threshold_end_run: boolean;
+    threshold_perk_affordable_enabled: boolean;
+    threshold_perk_affordable_pct: number;
+    threshold_perk_unaffordable_enabled: boolean;
+    threshold_perk_unaffordable_pct: number;
+    threshold_item_enabled: boolean;
+    threshold_item_pct: number;
+    threshold_progression_enabled: boolean;
+    threshold_progression_pct: number;
+    threshold_unlocker_enabled: boolean;
+    threshold_unlocker_pct: number;
+    threshold_other_enabled: boolean;
+    threshold_other_pct: number;
 }
 export declare function defaultMods(): GameMods;
 export declare function getMods(): GameMods;

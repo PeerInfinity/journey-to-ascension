@@ -21,6 +21,7 @@ export enum EventType {
     SkippedTasks,
     UsedItems,
     AwardedSparkOnDiscovery,
+    ThresholdStall,
 
     Count
 }

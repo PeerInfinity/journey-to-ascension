@@ -21,7 +21,8 @@ export var EventType;
     EventType[EventType["SkippedTasks"] = 14] = "SkippedTasks";
     EventType[EventType["UsedItems"] = 15] = "UsedItems";
     EventType[EventType["AwardedSparkOnDiscovery"] = 16] = "AwardedSparkOnDiscovery";
-    EventType[EventType["Count"] = 17] = "Count";
+    EventType[EventType["ThresholdStall"] = 17] = "ThresholdStall";
+    EventType[EventType["Count"] = 18] = "Count";
 })(EventType || (EventType = {}));
 export class EventContext {
 }

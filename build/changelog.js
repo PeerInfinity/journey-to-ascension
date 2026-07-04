@@ -5,6 +5,12 @@ export class ChangelogEntry {
 }
 export const CHANGELOG = [
     {
+        version: "Fork 1.4",
+        date: "2026-07-03",
+        changes: "- Added Energy Thresholds (Advanced Automation): skip prioritized Tasks that aren't worth their Energy — when the Energy one rep costs, divided by the skill levels it earns, exceeds a percentage of your max Energy. Six Task categories (new Perk you can finish this run, new Perk out of reach, awards an Item, progression, unlocks a Task, everything else), each with its own threshold and toggle; a disabled category is exempt and always runs<br>"
+            + "- Optional End Run When All Skipped: when every remaining prioritized Task is over its threshold, trigger the Energy Reset instead of idling<br>"
+    },
+    {
         version: "Fork 1.3",
         date: "2026-06-09",
         changes: "- Added Auto Bottled Lightning (Advanced Automation): automatically spends a held Bottled Lightning on a Boss rep you couldn't otherwise afford. With Auto Scroll of Haste also on, Lightning is applied first<br>"

@@ -41,7 +41,7 @@ const DEFAULT_TICK_RATE = 66.6;
 // upstream's save version. The Changelog popup checks SAVE_VERSION against the
 // newest CHANGELOG entry, so keep this equal to CHANGELOG[0].version — bump both
 // together when adding a fork changelog entry.
-export const SAVE_VERSION = "Fork 1.3";
+export const SAVE_VERSION = "Fork 1.4";
 const TASK_STARTED_PROGRESS = 0.01;
 
 // Player-scheduled "use this artifact here" tasks get ids in this range — well
@@ -132,6 +132,41 @@ function removeTemporarySkillBonuses() {
     for (const skill of GAMESTATE.skills.values()) {
         skill.speed_modifier = 1;
     }
+}
+
+// Fractional skill levels gained from adding `xp` to a skill, evaluated
+// against its current level/progress without mutating anything. Replays the
+// addSkillXp level-up loop and counts the partial progress toward the next
+// level on both sides, so tasks that grant less than a full level still
+// produce a usable (nonzero) number.
+function calcFractionalLevelsFromXp(skill_type: SkillType, xp: number): number {
+    const skill = getSkill(skill_type);
+    let level = skill.level;
+    let progress = skill.progress + xp;
+    let needed = calcSkillXpNeededAtLevel(level, skill_type);
+    const start_fraction = skill.progress / needed;
+
+    while (progress >= needed) {
+        progress -= needed;
+        level += 1;
+        needed = calcSkillXpNeededAtLevel(level, skill_type);
+    }
+
+    return (level - skill.level) + progress / needed - start_fraction;
+}
+
+// Expected (fractional) skill levels one full rep of this task would grant
+// right now. XP per tick is linear in task progress, so a whole rep awards
+// each of the task's skills calcSkillXp(task, calcTaskCost(task)); boosts
+// like a queued Magic Ring are deliberately ignored so the estimate reflects
+// the task itself.
+export function calcExpectedLevels(task: Task): number {
+    const xp = calcSkillXp(task, calcTaskCost(task), true);
+    let levels = 0;
+    for (const skill_type of task.task_definition.skills) {
+        levels += calcFractionalLevelsFromXp(skill_type, xp);
+    }
+    return levels;
 }
 
 export function calcSkillTaskProgressMultiplierFromLevel(level: number): number {
@@ -1875,6 +1910,132 @@ export function getSpiteTheGodsSkills() {
     return [SkillType.Ascension, SkillType.Charisma];
 }
 
+// MARK: Energy Thresholds (Game Mod)
+
+// Category of a task for the energy-per-level threshold filter. First match
+// wins: a task that awards an unearned perk is judged as a perk task even if
+// it also awards an item, is a progression task, or unlocks another task.
+export type ThresholdCategory =
+    | "perk_affordable"
+    | "perk_unaffordable"
+    | "item"
+    | "progression"
+    | "unlocker"
+    | "other";
+
+const THRESHOLD_MOD_KEYS: Record<ThresholdCategory, { enabled: keyof GameMods; pct: keyof GameMods }> = {
+    perk_affordable: { enabled: "threshold_perk_affordable_enabled", pct: "threshold_perk_affordable_pct" },
+    perk_unaffordable: { enabled: "threshold_perk_unaffordable_enabled", pct: "threshold_perk_unaffordable_pct" },
+    item: { enabled: "threshold_item_enabled", pct: "threshold_item_pct" },
+    progression: { enabled: "threshold_progression_enabled", pct: "threshold_progression_pct" },
+    unlocker: { enabled: "threshold_unlocker_enabled", pct: "threshold_unlocker_pct" },
+    other: { enabled: "threshold_other_enabled", pct: "threshold_other_pct" },
+};
+
+export function getThresholdCategory(task: Task): ThresholdCategory {
+    const def = task.task_definition;
+    if (def.perk != PerkType.Count && !hasPerk(def.perk)) {
+        return isPerkTaskAffordableThisCycle(task) ? "perk_affordable" : "perk_unaffordable";
+    }
+    if (def.item != ItemType.Count) {
+        return "item";
+    }
+    if (def.type == TaskType.Travel || def.type == TaskType.Mandatory || def.type == TaskType.Prestige) {
+        return "progression";
+    }
+    if (def.unlocks_task >= 0) {
+        return "unlocker";
+    }
+    return "other";
+}
+
+// Whether finishing ALL remaining reps — which is what actually awards the
+// perk — fits in the current energy, counting the best speed-up the held and
+// queued Artifacts could provide: up to that many reps costed hasted, and for
+// Bosses with Bottled Lightning on top. Mirrors getBossEnergyDisparityLimit's
+// optimism (what your Artifacts *could* do, not what happens to be queued).
+function isPerkTaskAffordableThisCycle(task: Task): boolean {
+    const remaining = task.task_definition.max_reps - task.reps;
+    if (remaining <= 0) {
+        return true;
+    }
+
+    const scrolls = (GAMESTATE.items.get(ItemType.ScrollOfHaste) ?? 0) + GAMESTATE.queued_scrolls_of_haste;
+    const lightning = task.task_definition.type == TaskType.Boss
+        ? (GAMESTATE.items.get(ItemType.BottledLightning) ?? 0) + GAMESTATE.queued_lightning
+        : 0;
+
+    // Per-rep cost only depends on which boosts apply, so the total is a
+    // split into (both, haste-only, lightning-only, plain) rep counts rather
+    // than a per-rep loop. Boosts pair up first — they stack.
+    const both = Math.min(remaining, scrolls, lightning);
+    const haste_only = Math.min(remaining - both, scrolls - both);
+    const lightning_only = Math.min(remaining - both - haste_only, lightning - both);
+    const plain = remaining - both - haste_only - lightning_only;
+
+    let total = 0;
+    if (both > 0) {
+        total += both * calcTaskEnergyCost(task, true, true);
+    }
+    if (haste_only > 0) {
+        total += haste_only * calcTaskEnergyCost(task, true, false);
+    }
+    if (lightning_only > 0) {
+        total += lightning_only * calcTaskEnergyCost(task, false, true);
+    }
+    if (plain > 0) {
+        total += plain * calcTaskEnergyCost(task, false, false);
+    }
+
+    return total <= GAMESTATE.current_energy;
+}
+
+// Game Mod — energy-per-level thresholds. A prioritized task is skipped when
+// earning one skill level from it costs more than the configured percentage
+// of max energy. Each category has its own threshold and can be individually
+// disabled; a disabled category is EXEMPT (its tasks always run). Synthetic
+// and skill-less tasks earn no levels and are always exempt.
+export function isThresholdSkipped(task: Task): boolean {
+    if (!GAMESTATE.mods.threshold_master) {
+        return false;
+    }
+    if (isSyntheticTask(task) || task.task_definition.skills.length == 0) {
+        return false;
+    }
+
+    const keys = THRESHOLD_MOD_KEYS[getThresholdCategory(task)];
+    if (!GAMESTATE.mods[keys.enabled]) {
+        return false;
+    }
+
+    const expected_levels = calcExpectedLevels(task);
+    if (expected_levels <= 0) {
+        return true;
+    }
+
+    const cost_per_level = calcTaskEnergyCost(task, false, false) / expected_levels;
+    const threshold_pct = GAMESTATE.mods[keys.pct] as number;
+    return cost_per_level > (threshold_pct / 100) * GAMESTATE.max_energy;
+}
+
+// Everything runnable was threshold-skipped. Automation would otherwise idle
+// forever — no running task means no energy drain, so the run never ends. If
+// the player opted in, treat "nothing left worth running" as the end of the
+// run; otherwise surface a one-shot notification and idle like pause-on-block.
+let threshold_stall_notified = false;
+
+function handleThresholdStall() {
+    if (GAMESTATE.mods.threshold_end_run) {
+        GAMESTATE.is_in_energy_reset = true;
+        populateEnergyResetInfo();
+        return;
+    }
+    if (!threshold_stall_notified) {
+        threshold_stall_notified = true;
+        GAMESTATE.queueRenderEvent(new RenderEvent(EventType.ThresholdStall, {}));
+    }
+}
+
 // MARK: Automation
 
 export enum AutomationMode {
@@ -1934,6 +2095,7 @@ function pickNextTaskInAutomationQueue(): Task | null {
         return null;
     }
 
+    let threshold_skipped_any = false;
     for (const task_id of prios) {
         for (const task of GAMESTATE.tasks) {
             if (task.task_definition.id != task_id) {
@@ -1951,8 +2113,22 @@ function pickNextTaskInAutomationQueue(): Task | null {
                 break;
             }
 
+            // Game Mod — energy thresholds: not worth the energy right now.
+            // Always skips (never pauses): unlike a blocked task this is a
+            // deliberate "don't bother", and the task stays in the list in
+            // case its category or level yield changes later in the run.
+            if (isThresholdSkipped(task)) {
+                threshold_skipped_any = true;
+                continue;
+            }
+
+            threshold_stall_notified = false;
             return task;
         }
+    }
+
+    if (threshold_skipped_any) {
+        handleThresholdStall();
     }
 
     return null;
@@ -1965,6 +2141,7 @@ export function setAutomationMode(mode: AutomationMode) {
     }
 
     GAMESTATE.automation_mode = mode;
+    threshold_stall_notified = false; // re-arm the "all Tasks skipped" notice
 }
 
 export function setAutomationEndZone(zone: number) {
@@ -2400,6 +2577,25 @@ export interface GameMods {
     auto_use_free_items: boolean;        // use "rounding-error" Items that won't reduce keep
     artifact_tasks_item_cycle_only: boolean; // only run scheduled artifact tasks on item cycles
     queue_cycle: boolean;                // cycle through saved automation queues, one per energy reset
+
+    // Energy Thresholds — skip prioritized tasks whose energy cost per skill
+    // level earned exceeds the category's percentage of max energy. A
+    // disabled category is exempt (its tasks always run). See
+    // isThresholdSkipped / getThresholdCategory.
+    threshold_master: boolean;                   // master switch for the filter
+    threshold_end_run: boolean;                  // trigger the energy reset when everything left is skipped
+    threshold_perk_affordable_enabled: boolean;  // awards an unearned perk, finishable within current energy
+    threshold_perk_affordable_pct: number;
+    threshold_perk_unaffordable_enabled: boolean; // awards an unearned perk, NOT finishable this cycle
+    threshold_perk_unaffordable_pct: number;
+    threshold_item_enabled: boolean;             // awards an item each rep
+    threshold_item_pct: number;
+    threshold_progression_enabled: boolean;      // Travel / Mandatory / Prestige tasks
+    threshold_progression_pct: number;
+    threshold_unlocker_enabled: boolean;         // unlocks another task when finished
+    threshold_unlocker_pct: number;
+    threshold_other_enabled: boolean;            // everything else
+    threshold_other_pct: number;
 }
 
 export function defaultMods(): GameMods {
@@ -2417,6 +2613,20 @@ export function defaultMods(): GameMods {
         auto_use_free_items: false,
         artifact_tasks_item_cycle_only: false,
         queue_cycle: false,
+        threshold_master: false,
+        threshold_end_run: false,
+        threshold_perk_affordable_enabled: false,
+        threshold_perk_affordable_pct: 100,
+        threshold_perk_unaffordable_enabled: false,
+        threshold_perk_unaffordable_pct: 25,
+        threshold_item_enabled: false,
+        threshold_item_pct: 50,
+        threshold_progression_enabled: false,
+        threshold_progression_pct: 100,
+        threshold_unlocker_enabled: false,
+        threshold_unlocker_pct: 50,
+        threshold_other_enabled: false,
+        threshold_other_pct: 10,
     };
 }
 

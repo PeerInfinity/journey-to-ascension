@@ -2285,6 +2285,11 @@ function handleEvents() {
                     message_div.innerHTML = `Discovery reward: +${formatInt(spark_context.amount)} ${DIVINE_SPARK_TEXT}`;
                     break;
                 }
+            case EventType.ThresholdStall:
+                {
+                    message_div.innerHTML = `Automation is idle: every remaining Task is over its Energy Threshold`;
+                    break;
+                }
             case EventType.NewHighestZone:
             case EventType.NewHighestZoneFullyCompleted:
                 {
@@ -2528,6 +2533,7 @@ function setupAdvancedAutomationControls(parent: Element) {
 
     setupAutoUseCycleControl(content);
     setupQueueCycleControl(content);
+    setupThresholdControls(content);
 }
 
 // Edit Priorities: enters/leaves the zone-navigable priority edit mode. Styled
@@ -2548,6 +2554,107 @@ function setupEditPrioritiesControl(content: Element) {
     });
     setupTooltip(button, () => editing ? "Done editing" : "Edit priorities", () =>
         "Browse the zones you've reached and set Task automation priorities for each, without anything running. Requires no Task to be in progress.");
+}
+
+// Energy Thresholds (Game Mod): skip prioritized Tasks whose energy cost per
+// skill level earned exceeds a per-category percentage of max Energy. One row
+// per category: a toggle (Off = that category is exempt and always runs) and
+// the percentage. Categories match getThresholdCategory's precedence order.
+const THRESHOLD_ROWS: { label: string; tooltip: string; enabled: keyof GameMods; pct: keyof GameMods }[] = [
+    {
+        label: "New Perk (finishable)",
+        tooltip: "Tasks that award a Perk you haven't earned this Prestige, when finishing all remaining reps fits in your current Energy — counting the speed-up your held Scrolls of Haste (and, for Bosses, Bottled Lightning) could provide.",
+        enabled: "threshold_perk_affordable_enabled",
+        pct: "threshold_perk_affordable_pct",
+    },
+    {
+        label: "New Perk (out of reach)",
+        tooltip: "Tasks that award a Perk you haven't earned this Prestige, when finishing all remaining reps does NOT fit in your current Energy, even counting your Artifacts' speed-ups.",
+        enabled: "threshold_perk_unaffordable_enabled",
+        pct: "threshold_perk_unaffordable_pct",
+    },
+    {
+        label: "Awards an Item",
+        tooltip: "Tasks that award an Item on each rep (and don't award an unearned Perk).",
+        enabled: "threshold_item_enabled",
+        pct: "threshold_item_pct",
+    },
+    {
+        label: "Progression",
+        tooltip: "Travel, Mandatory, and Prestige Tasks — the ones required to reach the next Zone.",
+        enabled: "threshold_progression_enabled",
+        pct: "threshold_progression_pct",
+    },
+    {
+        label: "Unlocks a Task",
+        tooltip: "Tasks that unlock another Task when finished (and fit no earlier category).",
+        enabled: "threshold_unlocker_enabled",
+        pct: "threshold_unlocker_pct",
+    },
+    {
+        label: "Everything else",
+        tooltip: "Tasks that fit none of the other categories.",
+        enabled: "threshold_other_enabled",
+        pct: "threshold_other_pct",
+    },
+];
+
+function setupThresholdControls(content: Element) {
+    const on = GAMESTATE.mods.threshold_master;
+    const master = createChildElement(content, "button") as HTMLButtonElement;
+    master.className = on ? "on" : "off";
+    master.textContent = `Energy Thresholds: ${on ? "On" : "Off"}`;
+    master.addEventListener("click", () => {
+        setMod("threshold_master", !GAMESTATE.mods.threshold_master);
+        setupControls(); // rebuild: shows/hides the per-category rows
+    });
+    setupTooltip(master, () => `Energy Thresholds: ${GAMESTATE.mods.threshold_master ? "On" : "Off"}`, () =>
+        "Skip prioritized Tasks that aren't worth their Energy: when the Energy one rep costs, divided by the skill levels it would earn, exceeds the category's percentage of your max Energy. Each category can be toggled off to exempt it — its Tasks then always run.");
+
+    if (!on) {
+        return;
+    }
+
+    const end_run = createChildElement(content, "button") as HTMLButtonElement;
+    function refreshEndRun() {
+        end_run.className = isModEnabled("threshold_end_run") ? "on" : "off";
+        end_run.textContent = `End Run When All Skipped: ${isModEnabled("threshold_end_run") ? "On" : "Off"}`;
+    }
+    refreshEndRun();
+    end_run.addEventListener("click", () => {
+        setMod("threshold_end_run", !isModEnabled("threshold_end_run"));
+        refreshEndRun();
+    });
+    setupTooltip(end_run, () => `End Run When All Skipped: ${isModEnabled("threshold_end_run") ? "On" : "Off"}`, () =>
+        "When every remaining prioritized Task is over its Energy Threshold, trigger the Energy Reset instead of idling — leftover Energy was only spendable at rates you've said aren't worth it. Off: automation idles and shows a notification instead.");
+
+    for (const row of THRESHOLD_ROWS) {
+        const row_div = createChildElement(content, "div");
+        row_div.className = "threshold-row";
+
+        const button = createChildElement(row_div, "button") as HTMLButtonElement;
+        function refresh() {
+            button.className = isModEnabled(row.enabled) ? "on" : "off";
+            button.textContent = row.label;
+        }
+        refresh();
+        button.addEventListener("click", () => {
+            setMod(row.enabled, !isModEnabled(row.enabled));
+            refresh();
+        });
+        setupTooltip(button, () => `${row.label}: ${isModEnabled(row.enabled) ? "On" : "Off"}`, () =>
+            `${row.tooltip}<br><br>On: skip these Tasks when one skill level costs more than the set percentage of max Energy. Off: these Tasks are exempt and always run.`);
+
+        createNumericInput(row_div, {
+            min: 1,
+            max: 1000,
+            initialValue: GAMESTATE.mods[row.pct] as number,
+            ariaLabel: `${row.label} threshold, % of max Energy per skill level`,
+            onChange: (value) => {
+                setMod(row.pct, value);
+            },
+        });
+    }
 }
 
 // Auto Use Cycle (Game Mod): a toggle plus a numeric input for how many Energy

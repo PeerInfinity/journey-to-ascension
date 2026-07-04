@@ -1042,6 +1042,18 @@ footer {
     font-size: 0.85em;
 }
 
+/* Energy Thresholds: category toggle + percent input side by side */
+.threshold-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+#controls .advanced-automation-content .threshold-row button:not(.numeric-input-button) {
+    width: auto;
+    flex: 1;
+}
+
 /* MARK: Artifact Task Sections
 */
 
