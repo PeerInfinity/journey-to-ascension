@@ -155,6 +155,7 @@ export interface GameMods {
     auto_dreamcatcher: boolean;
     auto_dreamcatcher_pct: number;
     auto_ring: boolean;
+    auto_prioritize: boolean;
     threshold_master: boolean;
     threshold_end_run: boolean;
     threshold_perk_affordable_enabled: boolean;

@@ -2095,6 +2095,7 @@ function setupAdvancedAutomationControls(parent) {
     });
     setupEditPrioritiesControl(content);
     setupAutoFillControl(content);
+    setupAutoPrioritizeControl(content);
     for (const toggle of ADVANCED_AUTOMATION_TOGGLES) {
         const button = createChildElement(content, "button");
         function refresh() {
@@ -2266,6 +2267,22 @@ function setupAutoFillControl(content) {
         flashMessage(`Auto-filled priorities for Zones 1-${GAMESTATE.highest_zone + 1}.`);
     });
     setupTooltip(button, () => "Auto-Fill Priorities", () => "Overwrite ALL reached Zones' automation priorities with a heuristic order: Item-awarding Tasks first, then Task-unlockers, then Perk Tasks (cheapest to finish first), then the rest by skill levels per Energy, with Mandatory/Prestige and Travel last. Combine with Energy Thresholds to skip whatever isn't currently worth running, and Edit Priorities for touch-ups. Newly unlocked or newly reached content isn't added automatically — click again to include it.");
+}
+// Auto-Prioritize (Game Mod): the autopilot form of Auto-Fill Priorities.
+// Dedicated control (not an ADVANCED_AUTOMATION_TOGGLES row) because enabling
+// it turns Queue Cycle off, so the panel needs a rebuild — same reason
+// setupQueueCycleControl exists.
+function setupAutoPrioritizeControl(content) {
+    const on = GAMESTATE.mods.auto_prioritize;
+    const button = createChildElement(content, "button");
+    button.className = on ? "on" : "off";
+    button.textContent = `Auto-Prioritize: ${on ? "On" : "Off"}`;
+    button.addEventListener("click", () => {
+        setMod("auto_prioritize", !GAMESTATE.mods.auto_prioritize);
+        setupControls(); // rebuild: reflects mutual exclusion with Queue Cycle
+        recreateTasks(); // enabling refills priorities immediately
+    });
+    setupTooltip(button, () => `Auto-Prioritize: ${GAMESTATE.mods.auto_prioritize ? "On" : "Off"}`, () => "Autopilot for priorities: automatically re-runs Auto-Fill Priorities at every Energy Reset and Prestige, when a Task is unlocked, and when you enter a Zone — so the order always reflects your current skills and Energy. Manual priority edits are overwritten while this is on. Mutually exclusive with Queue Cycle.");
 }
 // Auto Use Cycle (Game Mod): a toggle plus a numeric input for how many Energy
 // Resets run with Auto Use Items off before one runs with it on. Lives in the

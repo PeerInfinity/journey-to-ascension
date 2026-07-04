@@ -902,6 +902,9 @@ function unlockTask(task_id: number) {
         const event = new RenderEvent(EventType.UnlockedTask, context);
         GAMESTATE.queueRenderEvent(event);
     }
+
+    // Auto-Prioritize: slot the newly unlocked task into its zone's plan.
+    maybeAutoPrioritizeZone(task.zone_id);
 }
 
 function isTaskFullyCompleted(task: Task): boolean {
@@ -1095,6 +1098,11 @@ export function doEnergyReset() {
     applyResetCycle();
 
     doAnyReset(); // Gotta be after the current_zone check in calcEnergeticMemoryGain
+
+    // Auto-Prioritize: regenerate every zone's plan for the new run. After
+    // the cycle/reset so it wins over any loaded queue (the mods are mutually
+    // exclusive, but a stale queue plan could otherwise leak through).
+    maybeAutoPrioritizeAll();
 
     if (resume_automation) {
         GAMESTATE.automation_mode = saved_automation_mode;
@@ -2298,6 +2306,24 @@ export function autoFillAllPriorities() {
     saveGame();
 }
 
+// Game Mod — Auto-Prioritize: the autopilot form of Auto-Fill Priorities.
+// While enabled (and the Amulet is held), priorities are regenerated at every
+// energy reset and prestige, plus incrementally for one zone on task unlock
+// and zone entry, so the plan tracks the current skill/energy state without
+// any clicks. Manual edits are overwritten by design.
+function maybeAutoPrioritizeAll() {
+    if (GAMESTATE.mods.auto_prioritize && hasPerk(PerkType.Amulet)) {
+        autoFillAllPriorities();
+    }
+}
+
+function maybeAutoPrioritizeZone(zone_id: number) {
+    if (GAMESTATE.mods.auto_prioritize && hasPerk(PerkType.Amulet)) {
+        autoFillPriorities(zone_id);
+        syncActiveQueueIfCycling();
+    }
+}
+
 function pickNextTaskInAutomationQueue(): Task | null {
     if (GAMESTATE.automation_mode == AutomationMode.Off) {
         return null;
@@ -2628,6 +2654,12 @@ export function doPrestige() {
 
     resetTasks();
     applyGameStartPrestigeEffects();
+
+    // Auto-Prioritize: rebuild the plan for the fresh prestige — after the
+    // prestige effects, so a re-granted Amulet (force_automation /
+    // PermanentAutomation) passes the gate.
+    maybeAutoPrioritizeAll();
+
     storeLoopStartNumbersForNextGameOver();
     setTickRate();
     saveGame();
@@ -2800,6 +2832,7 @@ export interface GameMods {
     auto_dreamcatcher: boolean;          // auto-use Dreamcatchers late in the run
     auto_dreamcatcher_pct: number;       // fire when the next rep costs >= this % of current energy
     auto_ring: boolean;                  // spend Magic Rings on last run's best level-gain tasks
+    auto_prioritize: boolean;            // regenerate all priorities each reset/prestige/unlock/zone entry
 
     // Energy Thresholds — skip prioritized tasks whose energy cost per skill
     // level earned exceeds the category's percentage of max energy. A
@@ -2839,6 +2872,7 @@ export function defaultMods(): GameMods {
         auto_dreamcatcher: false,
         auto_dreamcatcher_pct: 25,
         auto_ring: false,
+        auto_prioritize: false,
         threshold_master: false,
         threshold_end_run: false,
         threshold_perk_affordable_enabled: false,
@@ -2894,10 +2928,16 @@ export function setMod(name: keyof GameMods, value: boolean | number): boolean {
     // current plan (if none yet) and makes the active queue the live plan.
     if (name == "queue_cycle" && GAMESTATE.mods.queue_cycle) {
         GAMESTATE.mods.auto_use_cycle = false;
+        // Queue cycling means hand-crafted per-queue plans; the autopilot
+        // would overwrite the loaded queue every reset.
+        GAMESTATE.mods.auto_prioritize = false;
         seedQueueConfigsIfEmpty();
         loadActiveQueue();
     } else if (name == "auto_use_cycle" && GAMESTATE.mods.auto_use_cycle) {
         GAMESTATE.mods.queue_cycle = false;
+    } else if (name == "auto_prioritize" && GAMESTATE.mods.auto_prioritize) {
+        GAMESTATE.mods.queue_cycle = false;
+        maybeAutoPrioritizeAll(); // take effect immediately, not at the next reset
     }
 
     applyMods();
@@ -3089,6 +3129,10 @@ function advanceZone() {
     
     GAMESTATE.current_zone = new_zone;
     resetTasks();
+
+    // Auto-Prioritize: (re)plan the zone just entered with current skills —
+    // this also covers a newly reached zone that no reset has planned yet.
+    maybeAutoPrioritizeZone(new_zone);
     doMasteryOfTimeTaskCompletion();
 }
 
@@ -3249,7 +3293,6 @@ export function updateGamestate() {
 // Queue cycling management.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).getQueueConfigs = () => ({ active: getActiveQueueIndex(), configs: getQueueConfigs() });
- 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).autoFillPriorities = () => { autoFillAllPriorities(); RENDERING.createTasks(); return { success: true }; };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
