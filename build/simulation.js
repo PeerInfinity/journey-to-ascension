@@ -912,6 +912,9 @@ export function doEnergyReset() {
     // incl. the Amulet that gates automation, are kept across them).
     const resume_automation = GAMESTATE.mods.resume_automation_on_reset;
     const saved_automation_mode = GAMESTATE.automation_mode;
+    // The run that just ended belongs to the pre-cycle context (queue index /
+    // auto-use phase); capture it before applyResetCycle advances them.
+    const ending_ring_context = currentRingContext();
     // Advance the per-reset cycle (queue swap or auto-use cycle) before
     // doAnyReset rebuilds the zone, so the newly-active queue's priorities and
     // artifact tasks are the ones injected.
@@ -926,9 +929,9 @@ export function doEnergyReset() {
     }
     GAMESTATE.energy_reset_count += 1;
     handleEnergyResetItemCounts();
-    // Rotate the per-run task history and rank the new run's Magic Ring plan
-    // from last run's completions.
-    GAMESTATE.last_run_task_history = GAMESTATE.run_task_history.filter((r) => r.completed);
+    // Bank the ended run's completions under its context, then rank the new
+    // run's Magic Ring plan from the new context's own history.
+    GAMESTATE.run_history_by_context[ending_ring_context] = GAMESTATE.run_task_history.filter((r) => r.completed);
     GAMESTATE.run_task_history = [];
     buildRingPlan();
     storeLoopStartNumbersForNextGameOver();
@@ -1682,18 +1685,57 @@ function recordRunTaskHistory(task) {
     // A task can rep several times a run; keep its best Ring opportunity.
     record.extra_levels_if_ringed = Math.max(record.extra_levels_if_ringed, extra);
 }
-// Called once per energy reset: ALL of last run's completed tasks, ranked by
-// Ring value. Deliberately not truncated to the Rings held at reset — without
-// the keep-items prestige unlock every Ring is culled at the reset, so Rings
-// are typically found and spent within the same run; maybeAutoUseRing instead
-// applies a dynamic top-K window (K = held + already spent) at spend time.
-// The plan persists in the save so a mid-run reload neither re-plans nor
-// re-spends.
+// Under queue cycling or the auto-use cycle, consecutive runs execute
+// different plans (per-queue priorities) or run at different speeds (banking
+// vs spending items), so "the previous run" can be a bad predictor of the
+// upcoming one. History is therefore kept per run CONTEXT, and each run's
+// Ring plan is built from the most recent completed run of the SAME context.
+// Contexts: the active queue index (queue cycling), the auto-use on/off
+// phase (auto-use cycle), or a single shared bucket otherwise. Stale buckets
+// (removed queues, disabled mods) linger harmlessly until prestige wipes
+// them; a queue reorder just means one cycle of re-learning.
+function currentRingContext() {
+    if (GAMESTATE.mods.queue_cycle) {
+        return `queue:${GAMESTATE.active_queue_index}`;
+    }
+    if (GAMESTATE.mods.auto_use_cycle) {
+        return `cycle:${GAMESTATE.auto_use_items ? "on" : "off"}`;
+    }
+    return "default";
+}
+// Extra levels a Ring would earn on this task, from the CURRENT skill state.
+// The history run that discovered the task can be a full cycle old (several
+// resets under queue cycling), so the extras recorded back then are stale;
+// only the reachability information (which tasks a comparable run actually
+// completes) is taken from history — the ranking is recomputed fresh.
+function calcRingExtraLevels(record) {
+    const def = TASK_LOOKUP.get(record.task_id);
+    if (!def || def.skills.length == 0) {
+        return record.extra_levels_if_ringed; // dangling id: recorded value
+    }
+    const probe = new Task(def);
+    const xp = calcSkillXp(probe, calcTaskCost(probe), true);
+    let extra = 0;
+    for (const skill_type of def.skills) {
+        extra += calcFractionalLevelsFromXp(skill_type, xp * MAGIC_RING_MULT)
+            - calcFractionalLevelsFromXp(skill_type, xp);
+    }
+    return extra;
+}
+// Called once per energy reset: the same-context history run's completed
+// tasks, ranked by Ring value. Deliberately not truncated to the Rings held
+// at reset — without the keep-items prestige unlock every Ring is culled at
+// the reset, so Rings are typically found and spent within the same run;
+// maybeAutoUseRing instead applies a dynamic top-K window (K = held +
+// already spent) at spend time. The plan persists in the save so a mid-run
+// reload neither re-plans nor re-spends.
 function buildRingPlan() {
     GAMESTATE.ring_plan_used = [];
-    GAMESTATE.ring_plan = [...GAMESTATE.last_run_task_history]
-        .sort((a, b) => b.extra_levels_if_ringed - a.extra_levels_if_ringed)
-        .map((r) => runTaskKey(r.zone_id, r.task_id));
+    const history = GAMESTATE.run_history_by_context[currentRingContext()] ?? [];
+    GAMESTATE.ring_plan = history
+        .map((r) => ({ key: runTaskKey(r.zone_id, r.task_id), extra: calcRingExtraLevels(r) }))
+        .sort((a, b) => b.extra - a.extra)
+        .map((entry) => entry.key);
 }
 // Per-category judgment metric for the threshold filter.
 export const THRESHOLD_METRIC_LEVEL = 0; // % of max energy per skill level earned ("worth it as XP?")
@@ -2331,7 +2373,7 @@ export function doPrestige() {
     // Prestige changes the XP/level balance (skills reset to aptitude base)
     // and wipes all Rings, so pre-prestige Ring history would only mislead.
     GAMESTATE.run_task_history = [];
-    GAMESTATE.last_run_task_history = [];
+    GAMESTATE.run_history_by_context = {};
     GAMESTATE.ring_plan = [];
     GAMESTATE.ring_plan_used = [];
     // Re-apply mods after the perk wipe so force_automation re-grants the
@@ -2492,6 +2534,18 @@ function loadGameFromData(data) {
     // Merge mods over defaults so saves from before a given mod existed (or
     // from before mods at all) get safe values for any missing field.
     GAMESTATE.mods = { ...defaultMods(), ...(GAMESTATE.mods ?? {}) };
+    // Migration: the single last_run_task_history became the per-context
+    // run_history_by_context. Seed the current context's bucket from the
+    // legacy field (after the mods merge — the context depends on mods).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const legacy_state = GAMESTATE;
+    if (Array.isArray(legacy_state.last_run_task_history)) {
+        if (legacy_state.last_run_task_history.length > 0
+            && Object.keys(GAMESTATE.run_history_by_context).length == 0) {
+            GAMESTATE.run_history_by_context[currentRingContext()] = legacy_state.last_run_task_history;
+        }
+        delete legacy_state.last_run_task_history;
+    }
     applyMods();
     // Artifact tasks are excluded from the saved `tasks`; rebuild the current
     // zone's from the persisted specs (load doesn't go through initializeTasks).
@@ -2638,7 +2692,9 @@ export class Gamestate {
     // runTaskKey) and which planned keys already got a Ring. All persisted so
     // a mid-run reload neither re-plans nor double-spends; wiped on prestige.
     run_task_history = [];
-    last_run_task_history = [];
+    // Completed-run history per run context (see currentRingContext): plain
+    // object keyed by context string, JSON-safe for the save as-is.
+    run_history_by_context = {};
     ring_plan = [];
     ring_plan_used = [];
     current_zone = 0;

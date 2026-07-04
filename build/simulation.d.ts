@@ -208,7 +208,7 @@ export declare class Gamestate {
     active_queue_index: number;
     queue_runs_on_current: number;
     run_task_history: RunTaskRecord[];
-    last_run_task_history: RunTaskRecord[];
+    run_history_by_context: Record<string, RunTaskRecord[]>;
     ring_plan: string[];
     ring_plan_used: string[];
     current_zone: number;

@@ -56,17 +56,23 @@ first**, then Auto Scroll of Haste re-checks and only adds a Scroll if the rep i
 
 **Auto Magic Ring** can't use an affordability trigger either — a Ring is 5×
 XP for one rep, so it should go to the rep that converts XP into the most
-levels, and future skill states are unknowable. Instead the game records every
-task started this run with the extra levels a Ring *would* have earned (from
-the skill state at rep start), keeps the successfully completed ones at the
-energy reset, and ranks them. When a ranked task starts, it gets a Ring if its
-rank fits the **Ring budget**: Rings currently held plus Rings already spent
-this run (so spending never shrinks the window, and a Ring found mid-run
-widens it immediately — important early game, where Rings don't survive the
-reset cull and must be spent the run they're found). One Ring per task per
-run. The plan and its spent marks persist in the save (no double-spend on
-reload) and are wiped on prestige, where skills reset and all Rings are lost
-anyway. On the first run after a prestige (or before any history exists) the
+levels, and future skill states are unknowable. Instead the game records which
+tasks each run *actually completes* — the reliable signal for how deep runs
+really reach — and keeps that history **per run context**: per queue under
+Queue Cycling, per banking/spending phase under the Auto Use Cycle, one shared
+bucket otherwise. Each run's plan comes from the most recent completed run of
+the *same* context (so a banking run's completions never mislead a spending
+run, and queue A's plan never ranks tasks queue B won't run), re-ranked at the
+reset by the extra levels a Ring would earn **at your current skills** (the
+matching history run can be a full cycle old). When a ranked task starts, it
+gets a Ring if its rank fits the **Ring budget**: Rings currently held plus
+Rings already spent this run (so spending never shrinks the window, and a Ring
+found mid-run widens it immediately — important early game, where Rings don't
+survive the reset cull and must be spent the run they're found). One Ring per
+task per run. The plan and its spent marks persist in the save (no
+double-spend on reload) and everything is wiped on prestige, where skills
+reset and all Rings are lost anyway. Before any matching history exists (first
+run after a prestige, or the first pass of a new queue/cycle phase) the
 feature simply waits.
 
 **Auto Dreamcatcher** uses a different trigger, because a Dreamcatcher doesn't
@@ -167,8 +173,9 @@ would never end. The **When All Skipped** control picks what:
   `applyTaskRepStartEffects()`; Dreamcatcher UI in
   `setupAutoDreamcatcherControl()` (`rendering.ts`).
 - **Run task history / Ring plan:** `RunTaskRecord`, `recordRunTaskHistory()`,
-  `buildRingPlan()`; rotation in `doEnergyReset()`, completion marking in
-  `applyFinishTaskRepEffects()`, wipe in `doPrestige()`.
+  `currentRingContext()` / `run_history_by_context`, `calcRingExtraLevels()`,
+  `buildRingPlan()`; context capture + rotation in `doEnergyReset()`,
+  completion marking in `applyFinishTaskRepEffects()`, wipe in `doPrestige()`.
 - **Auto-fill priorities:** `autoFillPriorities()` / `autoFillAllPriorities()`
   / `autoFillGroup()` (`simulation.ts`, also `window.autoFillPriorities`); UI
   in `setupAutoFillControl()` (`rendering.ts`).

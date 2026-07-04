@@ -2061,7 +2061,7 @@ const ADVANCED_AUTOMATION_TOGGLES = [
     },
     {
         label: "Auto Magic Ring",
-        tooltip: "Automatically spend held Magic Rings (5x XP for one rep) where they help most: the Tasks you completed last run are ranked by how many extra skill levels a Ring would have earned, and Tasks ranked within your Ring budget (Rings held plus Rings already spent this run) each get one Ring when they start. Rings found mid-run widen the budget immediately. Needs one completed run of history; only acts while Auto Use Items is enabled.",
+        tooltip: "Automatically spend held Magic Rings (5x XP for one rep) where they help most: the Tasks completed by your last comparable run — history is kept separately per queue (Queue Cycle) and per banking/spending phase (Auto Use Cycle) — are ranked by the extra skill levels a Ring would earn at your current skills, and Tasks ranked within your Ring budget (Rings held plus Rings already spent this run) each get one Ring when they start. Rings found mid-run widen the budget immediately. Needs one completed run of matching history; only acts while Auto Use Items is enabled.",
         mod: "auto_ring",
     },
     {
