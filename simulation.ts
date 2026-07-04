@@ -2224,6 +2224,80 @@ export function toggleAutomation(task: TaskDefinition) {
     syncActiveQueueIfCycling();
 }
 
+// MARK: Auto-Fill Priorities (Game Mod)
+
+// Heuristic order groups for autoFillPriorities; lower group runs earlier.
+// Resources first, then opening the task graph, then perks, then pure XP by
+// yield, with progression (Mandatory/Prestige) and Travel at the end — the
+// same travel-last invariant toggleAutomation maintains.
+function autoFillGroup(def: TaskDefinition): number {
+    if (def.type == TaskType.Travel) {
+        return 5;
+    }
+    if (def.type == TaskType.Mandatory || def.type == TaskType.Prestige) {
+        return 4;
+    }
+    if (def.item != ItemType.Count) {
+        return 0;
+    }
+    if (def.unlocks_task >= 0) {
+        return 1;
+    }
+    if (def.perk != PerkType.Count) {
+        return 2;
+    }
+    return 3;
+}
+
+export function autoFillPriorities(zone_id: number) {
+    const zone = ZONES[zone_id];
+    if (!zone) {
+        return;
+    }
+
+    const entries: { id: number; group: number; metric: number }[] = [];
+    for (const def of zone.tasks) {
+        if (def.hidden_by_default && !GAMESTATE.unlocked_tasks.includes(def.id)) {
+            continue; // not discovered yet — re-run after unlocking to include it
+        }
+
+        // Use the live Task where one exists (current zone: real reps and
+        // progress); a throwaway wrapper elsewhere — the cost and level
+        // estimates only need the definition plus the current skill state.
+        const live = GAMESTATE.tasks.find((t) => t.task_definition.id == def.id);
+        const task = live ?? new Task(def);
+
+        const group = autoFillGroup(def);
+        let metric = 0;
+        if (group == 2) {
+            // Perk tasks: cheapest-to-finish first, so reachable perks come early.
+            metric = calcTaskEnergyCost(task, false, false) * Math.max(1, def.max_reps - task.reps);
+        } else if (group == 3) {
+            // Plain tasks: most skill levels per energy first (negated for the
+            // ascending sort). The Energy Thresholds filter re-judges these
+            // live, so this order only has to be a sensible starting shape.
+            const cost = calcTaskEnergyCost(task, false, false);
+            metric = cost > 0 ? -(calcExpectedLevels(task) / cost) : 0;
+        }
+        entries.push({ id: def.id, group, metric });
+    }
+
+    entries.sort((a, b) => a.group - b.group || a.metric - b.metric || a.id - b.id);
+    GAMESTATE.automation_prios.set(zone_id, entries.map((e) => e.id));
+}
+
+export function autoFillAllPriorities() {
+    if (!hasPerk(PerkType.Amulet)) {
+        return; // same gate as toggleAutomation
+    }
+    const max_zone = Math.min(GAMESTATE.highest_zone, ZONES.length - 1);
+    for (let zone = 0; zone <= max_zone; zone++) {
+        autoFillPriorities(zone);
+    }
+    syncActiveQueueIfCycling();
+    saveGame();
+}
+
 function pickNextTaskInAutomationQueue(): Task | null {
     if (GAMESTATE.automation_mode == AutomationMode.Off) {
         return null;
@@ -3175,6 +3249,9 @@ export function updateGamestate() {
 // Queue cycling management.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).getQueueConfigs = () => ({ active: getActiveQueueIndex(), configs: getQueueConfigs() });
+ 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).autoFillPriorities = () => { autoFillAllPriorities(); RENDERING.createTasks(); return { success: true }; };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).addQueue = () => { const i = addQueue(); RENDERING.createTasks(); return { success: true, index: i }; };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

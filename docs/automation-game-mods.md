@@ -34,6 +34,7 @@ save from before a mod existed simply gets that mod off.
 | **Artifact Tasks: Item Cycles Only** | Only run scheduled artifact tasks while Auto Use Items is enabled (see [artifact-tasks.md](artifact-tasks.md)). |
 | **Auto Dreamcatcher** | Use a held Dreamcatcher before a task rep that would consume at least a set percentage of current energy (default 25%) — i.e. late in the run, when its "duplicate everything found this reset" effect is near its biggest. One per qualifying rep; only while Auto Use Items is enabled. |
 | **Auto Magic Ring** | Spend held Magic Rings (5× XP for one rep) on the tasks where they help most, ranked from last run's completions. Tasks ranked within the Ring budget (held + already spent this run) each get one Ring; Rings found mid-run widen the budget. Needs one completed run of history; only while Auto Use Items is enabled. |
+| **Auto-Fill Priorities** | (Button, not a toggle.) Overwrite every reached zone's automation priorities with a heuristic order: item-awarding tasks, task-unlockers, perk tasks (cheapest to finish first), the rest by skill levels per energy, then Mandatory/Prestige with Travel last. Re-click after unlocking or reaching new content. |
 | **Energy Thresholds** | Skip prioritized tasks that aren't worth their energy — per-category energy-per-level thresholds; see below. |
 | **End Run When All Skipped** | (Under Energy Thresholds) When every remaining prioritized task is over its threshold, trigger the Energy Reset instead of idling. |
 
@@ -126,6 +127,9 @@ a notification appears and automation idles.
 - **Run task history / Ring plan:** `RunTaskRecord`, `recordRunTaskHistory()`,
   `buildRingPlan()`; rotation in `doEnergyReset()`, completion marking in
   `applyFinishTaskRepEffects()`, wipe in `doPrestige()`.
+- **Auto-fill priorities:** `autoFillPriorities()` / `autoFillAllPriorities()`
+  / `autoFillGroup()` (`simulation.ts`, also `window.autoFillPriorities`); UI
+  in `setupAutoFillControl()` (`rendering.ts`).
 - **Cycles:** `applyResetCycle()` → `applyAutoUseCycle()` (and `applyQueueCycle()`).
 - **Free items:** `maybeUseRoundingErrorItem()`.
 - **Energy thresholds:** `isThresholdSkipped()` / `getThresholdCategory()` /

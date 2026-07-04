@@ -111,6 +111,8 @@ export declare enum AutomationMode {
     Off = 2
 }
 export declare function toggleAutomation(task: TaskDefinition): void;
+export declare function autoFillPriorities(zone_id: number): void;
+export declare function autoFillAllPriorities(): void;
 export declare function setAutomationMode(mode: AutomationMode): void;
 export declare function setAutomationEndZone(zone: number): void;
 export declare class EnergyResetInfo {

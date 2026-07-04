@@ -11,6 +11,7 @@ export const CHANGELOG = [
             + "- Optional End Run When All Skipped: when every remaining prioritized Task is over its threshold, trigger the Energy Reset instead of idling<br>"
             + "- Added Auto Dreamcatcher (Advanced Automation): automatically use a held Dreamcatcher before a Task rep that would consume at least a set percentage of your current Energy (default 25%), so the duplication fires late in the run when the Item haul is near its biggest<br>"
             + "- Added Auto Magic Ring (Advanced Automation): the Tasks you completed last run are ranked by how many extra skill levels a Magic Ring would have earned; the best ones (as many as you have Rings for, counting Rings found mid-run) each get a Ring automatically when they start this run<br>"
+            + "- Added Auto-Fill Priorities (Advanced Automation): one click fills every reached Zone's automation priorities with a sensible order — Item Tasks, Task-unlockers, Perk Tasks (cheapest first), the rest by skill levels per Energy, Mandatory/Prestige and Travel last<br>"
     },
     {
         version: "Fork 1.3",
