@@ -1,5 +1,5 @@
 import { Task, TaskDefinition, ZONES, TaskType, PERKS_BY_ZONE, ITEMS_BY_ZONE } from "./zones.js";
-import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, getBossEnergyDisparityLimit, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId, getQueueConfigs, getActiveQueueIndex, getQueueRunsOnCurrent, advanceQueueCycle, addQueue, removeQueue, setQueueAutoUseMode, getQueueExcludedItems, addQueueExcludedItem, removeQueueExcludedItem, setQueueRepeatCount, setQueueName, moveQueue, setActiveQueue, isEditMode, enterEditMode, exitEditMode, setEditZone, getEditMaxZone, autoFillAllPriorities, THRESHOLD_METRIC_REP, THRESHOLD_METRIC_RESETS, type AutoUseMode, type GameMods } from "./simulation.js";
+import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, getBossEnergyDisparityLimit, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId, getQueueConfigs, getActiveQueueIndex, getQueueRunsOnCurrent, advanceQueueCycle, addQueue, removeQueue, setQueueAutoUseMode, getQueueExcludedItems, addQueueExcludedItem, removeQueueExcludedItem, setQueueRepeatCount, setQueueName, moveQueue, setActiveQueue, isEditMode, enterEditMode, exitEditMode, setEditZone, getEditMaxZone, autoFillAllPriorities, THRESHOLD_METRIC_REP, THRESHOLD_METRIC_RESETS, THRESHOLD_ALL_SKIPPED_IDLE, type AutoUseMode, type GameMods } from "./simulation.js";
 import { GAMESTATE, RENDERING, resetSave } from "./game.js";
 import { ItemType, ItemDefinition, ITEMS, HASTE_MULT, ARTIFACTS, MAGIC_RING_MULT, BOTTLED_LIGHTNING_MULT } from "./items.js";
 import { PerkDefinition, PerkType, PERKS, getPerkNameWithEmoji } from "./perks.js";
@@ -2673,18 +2673,20 @@ function setupThresholdControls(content: Element) {
         return;
     }
 
-    const end_run = createChildElement(content, "button") as HTMLButtonElement;
-    function refreshEndRun() {
-        end_run.className = isModEnabled("threshold_end_run") ? "on" : "off";
-        end_run.textContent = `End Run When All Skipped: ${isModEnabled("threshold_end_run") ? "On" : "Off"}`;
+    const ALL_SKIPPED_LABELS = ["Idle", "End Run", "Best Task"];
+    const all_skipped = createChildElement(content, "button") as HTMLButtonElement;
+    function refreshAllSkipped() {
+        const action = GAMESTATE.mods.threshold_all_skipped;
+        all_skipped.className = action == THRESHOLD_ALL_SKIPPED_IDLE ? "off" : "on";
+        all_skipped.textContent = `When All Skipped: ${ALL_SKIPPED_LABELS[action] ?? "Idle"}`;
     }
-    refreshEndRun();
-    end_run.addEventListener("click", () => {
-        setMod("threshold_end_run", !isModEnabled("threshold_end_run"));
-        refreshEndRun();
+    refreshAllSkipped();
+    all_skipped.addEventListener("click", () => {
+        setMod("threshold_all_skipped", ((GAMESTATE.mods.threshold_all_skipped as number) + 1) % 3);
+        refreshAllSkipped();
     });
-    setupTooltip(end_run, () => `End Run When All Skipped: ${isModEnabled("threshold_end_run") ? "On" : "Off"}`, () =>
-        "When every remaining prioritized Task is over its Energy Threshold, trigger the Energy Reset instead of idling — leftover Energy was only spendable at rates you've said aren't worth it. Off: automation idles and shows a notification instead.");
+    setupTooltip(all_skipped, () => `When All Skipped: ${ALL_SKIPPED_LABELS[GAMESTATE.mods.threshold_all_skipped] ?? "Idle"}`, () =>
+        "What automation does when every remaining prioritized Task is over its Energy Threshold. Click to cycle.<br><br>Idle: stop and show a notification.<br>End Run: trigger the Energy Reset — leftover Energy was only spendable at rates you've said aren't worth it.<br>Best Task: run the skipped Task that would earn the most total skill levels from your remaining Energy (re-chosen every rep as Energy drains), so the run ends by conversion rather than idling.");
 
     for (const row of THRESHOLD_ROWS) {
         const row_div = createChildElement(content, "div");

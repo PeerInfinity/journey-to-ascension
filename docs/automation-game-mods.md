@@ -37,7 +37,7 @@ save from before a mod existed simply gets that mod off.
 | **Auto-Fill Priorities** | (Button, not a toggle.) Overwrite every reached zone's automation priorities with a heuristic order: item-awarding tasks, task-unlockers, perk tasks (cheapest to finish first), the rest by skill levels per energy, then Mandatory/Prestige with Travel last. Re-click after unlocking or reaching new content. |
 | **Auto-Prioritize** | Autopilot for the above: re-runs Auto-Fill automatically at every Energy Reset and Prestige, on task unlock, and on zone entry, so the order always reflects current skills and energy. Overwrites manual edits while on. Mutually exclusive with **Queue Cycling**. |
 | **Energy Thresholds** | Skip prioritized tasks that aren't worth their energy — per-category energy-per-level thresholds; see below. |
-| **End Run When All Skipped** | (Under Energy Thresholds) When every remaining prioritized task is over its threshold, trigger the Energy Reset instead of idling. |
+| **When All Skipped** | (Under Energy Thresholds) What happens when every remaining prioritized task is over its threshold: **Idle** (stop + notify), **End Run** (trigger the Energy Reset), or **Best Task** (run the skipped task that would earn the most total skill levels from the remaining energy). |
 
 > Note: **Auto Use Cycle** and **Queue Cycling** are mutually exclusive — at most
 > one per-reset cycle runs (see [queue-cycling.md](queue-cycling.md)).
@@ -136,10 +136,19 @@ fits. Synthetic tasks and skill-less tasks are always exempt.
 
 Threshold skipping always *skips* (it never pauses automation, regardless of
 the Skip/Pause on Blocked Tasks setting). If **everything** left is skipped,
-automation would idle forever — no running task means no energy drain. With
-**End Run When All Skipped** on, that state triggers the Energy Reset instead
-(pairs well with Auto-Continue Energy Reset and Resume on Reset); with it off,
-a notification appears and automation idles.
+something must happen — no running task means no energy drain, so the run
+would never end. The **When All Skipped** control picks what:
+
+- **Idle** (default) — automation stops and shows a notification.
+- **End Run** — trigger the Energy Reset; leftover energy was only spendable
+  at rejected rates anyway. Pairs well with Auto-Continue Energy Reset and
+  Resume on Reset.
+- **Best Task** — run the skipped task that would earn the **most total skill
+  levels** from the remaining energy (XP accrues per tick, so even reps that
+  can't finish convert energy into levels). The choice is re-evaluated at
+  every pick as energy drains, and if some task drops back under its
+  threshold the normal priority walk takes over again — so the run ends by
+  converting leftover energy into levels instead of idling.
 
 ## Code map
 
@@ -162,9 +171,10 @@ a notification appears and automation idles.
 - **Cycles:** `applyResetCycle()` → `applyAutoUseCycle()` (and `applyQueueCycle()`).
 - **Free items:** `maybeUseRoundingErrorItem()`.
 - **Energy thresholds:** `isThresholdSkipped()` / `getThresholdCategory()` /
-  `calcExpectedLevels()` / `estimateResetsToComplete()` and the
-  `THRESHOLD_METRIC_*` constants in `simulation.ts`; the skip hook and stall
-  handling in `pickNextTaskInAutomationQueue()`; UI in
-  `setupThresholdControls()` + `THRESHOLD_ROWS` (`rendering.ts`).
+  `calcExpectedLevels()` / `estimateResetsToComplete()` /
+  `estimateLevelsFromGrinding()` and the `THRESHOLD_METRIC_*` /
+  `THRESHOLD_ALL_SKIPPED_*` constants in `simulation.ts`; the skip hook and
+  `handleThresholdStall()` fallback in `pickNextTaskInAutomationQueue()`; UI
+  in `setupThresholdControls()` + `THRESHOLD_ROWS` (`rendering.ts`).
 - **UI:** the Settings section and the `ADVANCED_AUTOMATION_TOGGLES` table +
   `setupAdvancedAutomationControls()` in `rendering.ts`.

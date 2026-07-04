@@ -2257,22 +2257,78 @@ export function estimateResetsToComplete(task: Task, max_resets: number): number
     return max_resets + 1;
 }
 
-// Everything runnable was threshold-skipped. Automation would otherwise idle
-// forever — no running task means no energy drain, so the run never ends. If
-// the player opted in, treat "nothing left worth running" as the end of the
-// run; otherwise surface a one-shot notification and idle like pause-on-block.
+// What automation does when every runnable task was threshold-skipped.
+// Something must happen — no running task means no energy drain, so the run
+// would otherwise never end.
+export const THRESHOLD_ALL_SKIPPED_IDLE = 0;     // stop and notify, like pause-on-block
+export const THRESHOLD_ALL_SKIPPED_END_RUN = 1;  // trigger the energy reset
+export const THRESHOLD_ALL_SKIPPED_BEST_TASK = 2; // run the best-level-yield skipped task anyway
+
+// Estimated total (fractional) skill levels from pouring `budget` energy into
+// this task, capped at finishing its remaining reps. XP accrues per tick and
+// is linear in progress, so even a rep that can't finish converts energy into
+// levels — which is what makes "run the best task anyway" meaningful.
+export function estimateLevelsFromGrinding(task: Task, budget: number): number {
+    const def = task.task_definition;
+    if (def.skills.length == 0) {
+        return 0;
+    }
+    const cost = calcTaskCost(task);
+    const progress_per_tick = calcTaskProgressMultiplier(task);
+    const drain = calcEnergyDrainPerTick(task, isSingleTickTaskImpl(progress_per_tick, cost));
+    const max_progress = cost * Math.max(1, def.max_reps - task.reps);
+    const progress = drain > 0
+        ? Math.min(Math.floor(budget / drain) * progress_per_tick, max_progress)
+        : max_progress;
+    const xp = calcSkillXp(task, progress, true);
+    let levels = 0;
+    for (const skill_type of def.skills) {
+        levels += calcFractionalLevelsFromXp(skill_type, xp);
+    }
+    return levels;
+}
+
 let threshold_stall_notified = false;
 
-function handleThresholdStall() {
-    if (GAMESTATE.mods.threshold_end_run) {
+// Returns the fallback task to run (Best Task mode), or null if automation
+// should stay idle this tick (Idle mode, End Run mode, or no viable pick).
+function handleThresholdStall(skipped: Task[]): Task | null {
+    const action = GAMESTATE.mods.threshold_all_skipped;
+
+    if (action == THRESHOLD_ALL_SKIPPED_END_RUN) {
+        // Leftover energy was by definition only spendable at rejected rates.
         GAMESTATE.is_in_energy_reset = true;
         populateEnergyResetInfo();
-        return;
+        return null;
     }
+
+    if (action == THRESHOLD_ALL_SKIPPED_BEST_TASK) {
+        // Convert the remaining energy into the most skill levels available.
+        // Recomputed at every pick (it's cheap and the numbers shift as
+        // energy drains); once some task passes its threshold again, the
+        // normal walk resumes ahead of this fallback.
+        let best: Task | null = null;
+        let best_levels = 0;
+        for (const task of skipped) {
+            const levels = estimateLevelsFromGrinding(task, GAMESTATE.current_energy);
+            if (levels > best_levels) {
+                best = task;
+                best_levels = levels;
+            }
+        }
+        if (best) {
+            threshold_stall_notified = false;
+            return best;
+        }
+        // No candidate can earn anything (e.g. not enough energy for one
+        // tick) — fall through to the idle notification.
+    }
+
     if (!threshold_stall_notified) {
         threshold_stall_notified = true;
         GAMESTATE.queueRenderEvent(new RenderEvent(EventType.ThresholdStall, {}));
     }
+    return null;
 }
 
 // MARK: Automation
@@ -2426,7 +2482,7 @@ function pickNextTaskInAutomationQueue(): Task | null {
         return null;
     }
 
-    let threshold_skipped_any = false;
+    const threshold_skipped: Task[] = [];
     for (const task_id of prios) {
         for (const task of GAMESTATE.tasks) {
             if (task.task_definition.id != task_id) {
@@ -2448,8 +2504,9 @@ function pickNextTaskInAutomationQueue(): Task | null {
             // Always skips (never pauses): unlike a blocked task this is a
             // deliberate "don't bother", and the task stays in the list in
             // case its category or level yield changes later in the run.
+            // Collected so the all-skipped fallback can pick from them.
             if (isThresholdSkipped(task)) {
-                threshold_skipped_any = true;
+                threshold_skipped.push(task);
                 continue;
             }
 
@@ -2458,8 +2515,8 @@ function pickNextTaskInAutomationQueue(): Task | null {
         }
     }
 
-    if (threshold_skipped_any) {
-        handleThresholdStall();
+    if (threshold_skipped.length > 0) {
+        return handleThresholdStall(threshold_skipped);
     }
 
     return null;
@@ -2898,6 +2955,15 @@ function loadGameFromData(data: any) {
         for (const category of THRESHOLD_CATEGORY_LIST) {
             delete legacy_mods[`threshold_${category}_absolute`];
         }
+        // threshold_end_run (bool) became the 3-way threshold_all_skipped;
+        // preserve a deliberate end-run choice.
+        if ("threshold_end_run" in legacy_mods) {
+            if (!("threshold_all_skipped" in legacy_mods)) {
+                legacy_mods.threshold_all_skipped = legacy_mods.threshold_end_run
+                    ? THRESHOLD_ALL_SKIPPED_END_RUN : THRESHOLD_ALL_SKIPPED_IDLE;
+            }
+            delete legacy_mods.threshold_end_run;
+        }
     }
 
     // Merge mods over defaults so saves from before a given mod existed (or
@@ -2947,7 +3013,7 @@ export interface GameMods {
     // two %-based metrics, and a max-resets count for the resets metric. See
     // isThresholdSkipped / getThresholdCategory / estimateResetsToComplete.
     threshold_master: boolean;                   // master switch for the filter
-    threshold_end_run: boolean;                  // trigger the energy reset when everything left is skipped
+    threshold_all_skipped: number;               // THRESHOLD_ALL_SKIPPED_*: idle / end run / run best-yield task
     threshold_perk_affordable_enabled: boolean;  // awards an unearned perk, finishable within current energy
     threshold_perk_affordable_pct: number;
     threshold_perk_affordable_metric: number;
@@ -2994,7 +3060,7 @@ export function defaultMods(): GameMods {
         auto_ring: false,
         auto_prioritize: false,
         threshold_master: false,
-        threshold_end_run: false,
+        threshold_all_skipped: THRESHOLD_ALL_SKIPPED_IDLE,
         threshold_perk_affordable_enabled: false,
         threshold_perk_affordable_pct: 100,
         threshold_perk_affordable_metric: THRESHOLD_METRIC_RESETS,

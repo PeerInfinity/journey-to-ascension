@@ -109,6 +109,10 @@ export declare const THRESHOLD_METRIC_RESETS = 2;
 export declare function getThresholdCategory(task: Task): ThresholdCategory;
 export declare function isThresholdSkipped(task: Task): boolean;
 export declare function estimateResetsToComplete(task: Task, max_resets: number): number;
+export declare const THRESHOLD_ALL_SKIPPED_IDLE = 0;
+export declare const THRESHOLD_ALL_SKIPPED_END_RUN = 1;
+export declare const THRESHOLD_ALL_SKIPPED_BEST_TASK = 2;
+export declare function estimateLevelsFromGrinding(task: Task, budget: number): number;
 export declare enum AutomationMode {
     All = 0,
     Zone = 1,
@@ -161,7 +165,7 @@ export interface GameMods {
     auto_ring: boolean;
     auto_prioritize: boolean;
     threshold_master: boolean;
-    threshold_end_run: boolean;
+    threshold_all_skipped: number;
     threshold_perk_affordable_enabled: boolean;
     threshold_perk_affordable_pct: number;
     threshold_perk_affordable_metric: number;
