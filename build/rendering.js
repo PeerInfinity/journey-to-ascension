@@ -2197,7 +2197,7 @@ const THRESHOLD_ROWS = [
     },
     {
         label: "Progression",
-        tooltip: "Travel, Mandatory, and Prestige Tasks — the ones required to reach the next Zone. Defaults to per-rep judgment: their value is progression, not XP, and a high skill level would make Energy-per-level explode and strand the run.",
+        tooltip: "Travel, Mandatory, and Prestige Tasks — the ones required to reach the next Zone. Avoid /lvl here: their value is progression, not XP, and a high skill level makes Energy-per-level explode and strand the run.",
         enabled: "threshold_progression_enabled",
         pct: "threshold_progression_pct",
         metric: "threshold_progression_metric",
@@ -2229,7 +2229,7 @@ function setupThresholdControls(content) {
         setMod("threshold_master", !GAMESTATE.mods.threshold_master);
         setupControls(); // rebuild: shows/hides the per-category rows
     });
-    setupTooltip(master, () => `Energy Thresholds: ${GAMESTATE.mods.threshold_master ? "On" : "Off"}`, () => "Skip prioritized Tasks that fail their category's judgment. Each category picks its metric: /lvl (Energy per skill level earned vs a % of max Energy — \"worth it as XP?\"), /rep (the rep's total Energy vs that % — \"can I afford it?\"), or /rst (estimated Energy Resets until fully completable vs a count — \"reachable soon?\"). Progression defaults to /rep, since its value isn't XP. Each category can be toggled off to exempt it — its Tasks then always run.");
+    setupTooltip(master, () => `Energy Thresholds: ${GAMESTATE.mods.threshold_master ? "On" : "Off"}`, () => "Skip prioritized Tasks that fail their category's judgment. Each category picks its metric: /lvl (Energy per skill level earned vs a % of max Energy — \"worth it as XP?\"), /rep (the rep's total Energy vs that % — \"can I afford it?\"), or /rst (estimated Energy Resets until fully completable vs a count — \"reachable soon?\", the default). Each category can be toggled off to exempt it — its Tasks then always run.");
     if (!on) {
         return;
     }

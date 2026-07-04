@@ -96,10 +96,10 @@ fails its category's judgment, where each category picks the judgment via its
 - **/rep** — the rep's total energy cost vs that percentage: "don't do this
   if one rep costs more than T% of my max energy." Right for tasks whose
   value isn't XP.
-- **/rst** — the estimated number of **energy resets** until the task could be
-  *fully completed* (all remaining reps in one go), vs a reset count: "skip
-  it if it isn't reachable within N resets." 0 means it must be completable
-  right now. The estimate assumes conditions like the moment of the decision
+- **/rst** (the default for every category) — the estimated number of
+  **energy resets** until the task could be *fully completed* (all remaining
+  reps in one go), vs a reset count: "skip it if it isn't reachable within N
+  resets." 0 means it must be completable right now. The estimate assumes conditions like the moment of the decision
   repeat each reset — the same remaining energy as the budget, the same
   active boosts — and that each simulated run grinds its whole budget into
   this one task (only skill XP survives a reset, which is what the grind
@@ -122,11 +122,11 @@ tasks always run.**
 2. **New Perk (out of reach)** — awards an unearned perk, but finishing it does
    *not* fit this cycle even with your Artifacts.
 3. **Awards an Item** — grants an Item on each rep.
-4. **Progression** — Travel, Mandatory, and Prestige tasks. **Defaults to
-   /rep**: their value is progression, not XP, and the /lvl metric would
-   explode once the task's skill outlevels early-zone XP — a farmed-up skill
-   would make an old zone's Travel task look infinitely expensive per level
-   and strand the run there. (All other categories default to /lvl.)
+4. **Progression** — Travel, Mandatory, and Prestige tasks. Avoid /lvl here:
+   their value is progression, not XP, and the /lvl metric explodes once the
+   task's skill outlevels early-zone XP — a farmed-up skill would make an old
+   zone's Travel task look infinitely expensive per level and strand the run
+   there.
 5. **Unlocks a Task** — finishing it unlocks another task.
 6. **Everything else.**
 

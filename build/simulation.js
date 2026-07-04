@@ -1762,12 +1762,11 @@ function isPerkTaskAffordableThisCycle(task) {
 }
 // Game Mod — energy thresholds. A prioritized task is skipped when it fails
 // its category's judgment, one of three per-category metrics: energy per
-// skill level earned vs a % of max energy (default for XP-valued
-// categories), the rep's absolute energy vs that % (default for progression
-// — see below), or the estimated energy resets until fully completable vs a
-// max-resets count. Each category has its own values, metric switch, and
-// enable toggle; a disabled category is EXEMPT (its tasks always run).
-// Synthetic and skill-less tasks are always exempt.
+// skill level earned vs a % of max energy, the rep's absolute energy vs that
+// %, or the estimated energy resets until fully completable vs a max-resets
+// count (the default for every category). Each category has its own values,
+// metric switch, and enable toggle; a disabled category is EXEMPT (its tasks
+// always run). Synthetic and skill-less tasks are always exempt.
 export function isThresholdSkipped(task) {
     if (!GAMESTATE.mods.threshold_master) {
         return false;
@@ -2397,21 +2396,15 @@ function loadGameFromData(data) {
         }
     }
     // Migration: Fork 1.4 briefly shipped boolean threshold_*_absolute metric
-    // toggles, immediately generalized to the 3-way threshold_*_metric field.
-    // Map any saved legacy flag onto the new field (absent from such saves by
-    // definition) and drop it so it doesn't linger in the merged mods object.
+    // toggles, immediately generalized to the 3-way threshold_*_metric field
+    // with /rst as the default. Drop any saved legacy flag WITHOUT mapping it
+    // (deliberate, per user: the 2-state era's auto-assigned values shouldn't
+    // pin old saves to /lvl//rep — let the merge apply the /rst default).
     if (GAMESTATE.mods) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const legacy_mods = GAMESTATE.mods;
         for (const category of THRESHOLD_CATEGORY_LIST) {
-            const absolute_key = `threshold_${category}_absolute`;
-            const metric_key = `threshold_${category}_metric`;
-            if (absolute_key in legacy_mods) {
-                if (!(metric_key in legacy_mods)) {
-                    legacy_mods[metric_key] = legacy_mods[absolute_key] ? THRESHOLD_METRIC_REP : THRESHOLD_METRIC_LEVEL;
-                }
-                delete legacy_mods[absolute_key];
-            }
+            delete legacy_mods[`threshold_${category}_absolute`];
         }
     }
     // Merge mods over defaults so saves from before a given mod existed (or
@@ -2446,27 +2439,27 @@ export function defaultMods() {
         threshold_end_run: false,
         threshold_perk_affordable_enabled: false,
         threshold_perk_affordable_pct: 100,
-        threshold_perk_affordable_metric: THRESHOLD_METRIC_LEVEL,
+        threshold_perk_affordable_metric: THRESHOLD_METRIC_RESETS,
         threshold_perk_affordable_resets: 3,
         threshold_perk_unaffordable_enabled: false,
         threshold_perk_unaffordable_pct: 25,
-        threshold_perk_unaffordable_metric: THRESHOLD_METRIC_LEVEL,
+        threshold_perk_unaffordable_metric: THRESHOLD_METRIC_RESETS,
         threshold_perk_unaffordable_resets: 3,
         threshold_item_enabled: false,
         threshold_item_pct: 50,
-        threshold_item_metric: THRESHOLD_METRIC_LEVEL,
+        threshold_item_metric: THRESHOLD_METRIC_RESETS,
         threshold_item_resets: 3,
         threshold_progression_enabled: false,
         threshold_progression_pct: 100,
-        threshold_progression_metric: THRESHOLD_METRIC_REP,
+        threshold_progression_metric: THRESHOLD_METRIC_RESETS,
         threshold_progression_resets: 3,
         threshold_unlocker_enabled: false,
         threshold_unlocker_pct: 50,
-        threshold_unlocker_metric: THRESHOLD_METRIC_LEVEL,
+        threshold_unlocker_metric: THRESHOLD_METRIC_RESETS,
         threshold_unlocker_resets: 3,
         threshold_other_enabled: false,
         threshold_other_pct: 10,
-        threshold_other_metric: THRESHOLD_METRIC_LEVEL,
+        threshold_other_metric: THRESHOLD_METRIC_RESETS,
         threshold_other_resets: 3,
     };
 }
