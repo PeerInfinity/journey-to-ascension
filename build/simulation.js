@@ -1696,12 +1696,12 @@ function buildRingPlan() {
         .map((r) => runTaskKey(r.zone_id, r.task_id));
 }
 const THRESHOLD_MOD_KEYS = {
-    perk_affordable: { enabled: "threshold_perk_affordable_enabled", pct: "threshold_perk_affordable_pct" },
-    perk_unaffordable: { enabled: "threshold_perk_unaffordable_enabled", pct: "threshold_perk_unaffordable_pct" },
-    item: { enabled: "threshold_item_enabled", pct: "threshold_item_pct" },
-    progression: { enabled: "threshold_progression_enabled", pct: "threshold_progression_pct" },
-    unlocker: { enabled: "threshold_unlocker_enabled", pct: "threshold_unlocker_pct" },
-    other: { enabled: "threshold_other_enabled", pct: "threshold_other_pct" },
+    perk_affordable: { enabled: "threshold_perk_affordable_enabled", pct: "threshold_perk_affordable_pct", absolute: "threshold_perk_affordable_absolute" },
+    perk_unaffordable: { enabled: "threshold_perk_unaffordable_enabled", pct: "threshold_perk_unaffordable_pct", absolute: "threshold_perk_unaffordable_absolute" },
+    item: { enabled: "threshold_item_enabled", pct: "threshold_item_pct", absolute: "threshold_item_absolute" },
+    progression: { enabled: "threshold_progression_enabled", pct: "threshold_progression_pct", absolute: "threshold_progression_absolute" },
+    unlocker: { enabled: "threshold_unlocker_enabled", pct: "threshold_unlocker_pct", absolute: "threshold_unlocker_absolute" },
+    other: { enabled: "threshold_other_enabled", pct: "threshold_other_pct", absolute: "threshold_other_absolute" },
 };
 export function getThresholdCategory(task) {
     const def = task.task_definition;
@@ -1755,12 +1755,13 @@ function isPerkTaskAffordableThisCycle(task) {
     }
     return total <= GAMESTATE.current_energy;
 }
-// Game Mod — energy-per-level thresholds. A prioritized task is skipped when
-// earning one skill level from it costs more than the configured percentage
-// of max energy (progression tasks instead compare the rep's absolute cost —
-// see below). Each category has its own threshold and can be individually
-// disabled; a disabled category is EXEMPT (its tasks always run). Synthetic
-// and skill-less tasks earn no levels and are always exempt.
+// Game Mod — energy thresholds. A prioritized task is skipped when it costs
+// more than the configured percentage of max energy, where "costs" is one of
+// two per-category metrics: energy per skill level earned (the default for
+// XP-valued categories), or the rep's absolute energy (default for
+// progression — see below). Each category has its own threshold, metric
+// toggle, and enable toggle; a disabled category is EXEMPT (its tasks always
+// run). Synthetic and skill-less tasks are always exempt.
 export function isThresholdSkipped(task) {
     if (!GAMESTATE.mods.threshold_master) {
         return false;
@@ -1776,12 +1777,12 @@ export function isThresholdSkipped(task) {
     const threshold_pct = GAMESTATE.mods[keys.pct];
     const budget = (threshold_pct / 100) * GAMESTATE.max_energy;
     const cost = calcTaskEnergyCost(task, false, false);
-    // Progression tasks (Travel/Mandatory/Prestige) are judged on the rep's
-    // ABSOLUTE energy cost, not energy-per-level: their value is progression,
-    // not XP, and a per-level metric inevitably explodes once the task's
-    // skill outgrows early-zone XP (a farmed-up Charisma made zone 1's Travel
-    // task look infinitely expensive per level and stranded the run).
-    if (category == "progression") {
+    // Absolute mode: judge the rep's total energy cost. The default for
+    // progression (Travel/Mandatory/Prestige), whose value is progression,
+    // not XP — a per-level metric inevitably explodes once the task's skill
+    // outgrows early-zone XP (a farmed-up Charisma made zone 1's Travel task
+    // look infinitely expensive per level and stranded the run).
+    if (GAMESTATE.mods[keys.absolute]) {
         return cost > budget;
     }
     const expected_levels = calcExpectedLevels(task);
@@ -2359,16 +2360,22 @@ export function defaultMods() {
         threshold_end_run: false,
         threshold_perk_affordable_enabled: false,
         threshold_perk_affordable_pct: 100,
+        threshold_perk_affordable_absolute: false,
         threshold_perk_unaffordable_enabled: false,
         threshold_perk_unaffordable_pct: 25,
+        threshold_perk_unaffordable_absolute: false,
         threshold_item_enabled: false,
         threshold_item_pct: 50,
+        threshold_item_absolute: false,
         threshold_progression_enabled: false,
         threshold_progression_pct: 100,
+        threshold_progression_absolute: true,
         threshold_unlocker_enabled: false,
         threshold_unlocker_pct: 50,
+        threshold_unlocker_absolute: false,
         threshold_other_enabled: false,
         threshold_other_pct: 10,
+        threshold_other_absolute: false,
     };
 }
 export function getMods() {

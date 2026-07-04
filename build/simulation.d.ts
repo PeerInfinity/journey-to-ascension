@@ -160,16 +160,22 @@ export interface GameMods {
     threshold_end_run: boolean;
     threshold_perk_affordable_enabled: boolean;
     threshold_perk_affordable_pct: number;
+    threshold_perk_affordable_absolute: boolean;
     threshold_perk_unaffordable_enabled: boolean;
     threshold_perk_unaffordable_pct: number;
+    threshold_perk_unaffordable_absolute: boolean;
     threshold_item_enabled: boolean;
     threshold_item_pct: number;
+    threshold_item_absolute: boolean;
     threshold_progression_enabled: boolean;
     threshold_progression_pct: number;
+    threshold_progression_absolute: boolean;
     threshold_unlocker_enabled: boolean;
     threshold_unlocker_pct: number;
+    threshold_unlocker_absolute: boolean;
     threshold_other_enabled: boolean;
     threshold_other_pct: number;
+    threshold_other_absolute: boolean;
 }
 export declare function defaultMods(): GameMods;
 export declare function getMods(): GameMods;

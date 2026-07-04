@@ -1054,6 +1054,12 @@ footer {
     flex: 1;
 }
 
+/* The compact /lvl vs /rep metric switch keeps its natural width */
+#controls .advanced-automation-content .threshold-row button.threshold-mode {
+    flex: 0 0 auto;
+    padding: 6px 6px;
+}
+
 /* MARK: Artifact Task Sections
 */
 

@@ -2163,47 +2163,53 @@ function setupEditPrioritiesControl(content) {
     });
     setupTooltip(button, () => editing ? "Done editing" : "Edit priorities", () => "Browse the zones you've reached and set Task automation priorities for each, without anything running. Requires no Task to be in progress.");
 }
-// Energy Thresholds (Game Mod): skip prioritized Tasks whose energy cost per
-// skill level earned exceeds a per-category percentage of max Energy. One row
-// per category: a toggle (Off = that category is exempt and always runs) and
-// the percentage. Categories match getThresholdCategory's precedence order.
+// Energy Thresholds (Game Mod): skip prioritized Tasks that cost more than a
+// per-category percentage of max Energy — judged per skill level earned
+// (/lvl) or per rep (/rep), switchable per row. One row per category: a
+// toggle (Off = that category is exempt and always runs), the metric switch,
+// and the percentage. Categories match getThresholdCategory's precedence.
 const THRESHOLD_ROWS = [
     {
         label: "New Perk (finishable)",
         tooltip: "Tasks that award a Perk you haven't earned this Prestige, when finishing all remaining reps fits in your current Energy — counting the speed-up your held Scrolls of Haste (and, for Bosses, Bottled Lightning) could provide.",
         enabled: "threshold_perk_affordable_enabled",
         pct: "threshold_perk_affordable_pct",
+        absolute: "threshold_perk_affordable_absolute",
     },
     {
         label: "New Perk (out of reach)",
         tooltip: "Tasks that award a Perk you haven't earned this Prestige, when finishing all remaining reps does NOT fit in your current Energy, even counting your Artifacts' speed-ups.",
         enabled: "threshold_perk_unaffordable_enabled",
         pct: "threshold_perk_unaffordable_pct",
+        absolute: "threshold_perk_unaffordable_absolute",
     },
     {
         label: "Awards an Item",
         tooltip: "Tasks that award an Item on each rep (and don't award an unearned Perk).",
         enabled: "threshold_item_enabled",
         pct: "threshold_item_pct",
+        absolute: "threshold_item_absolute",
     },
     {
         label: "Progression",
-        tooltip: "Travel, Mandatory, and Prestige Tasks — the ones required to reach the next Zone. Judged on the rep's total Energy cost rather than Energy per level: their value is progression, not XP.",
+        tooltip: "Travel, Mandatory, and Prestige Tasks — the ones required to reach the next Zone. Defaults to per-rep judgment: their value is progression, not XP, and a high skill level would make Energy-per-level explode and strand the run.",
         enabled: "threshold_progression_enabled",
         pct: "threshold_progression_pct",
-        absolute: true,
+        absolute: "threshold_progression_absolute",
     },
     {
         label: "Unlocks a Task",
         tooltip: "Tasks that unlock another Task when finished (and fit no earlier category).",
         enabled: "threshold_unlocker_enabled",
         pct: "threshold_unlocker_pct",
+        absolute: "threshold_unlocker_absolute",
     },
     {
         label: "Everything else",
         tooltip: "Tasks that fit none of the other categories.",
         enabled: "threshold_other_enabled",
         pct: "threshold_other_pct",
+        absolute: "threshold_other_absolute",
     },
 ];
 function setupThresholdControls(content) {
@@ -2215,7 +2221,7 @@ function setupThresholdControls(content) {
         setMod("threshold_master", !GAMESTATE.mods.threshold_master);
         setupControls(); // rebuild: shows/hides the per-category rows
     });
-    setupTooltip(master, () => `Energy Thresholds: ${GAMESTATE.mods.threshold_master ? "On" : "Off"}`, () => "Skip prioritized Tasks that aren't worth their Energy: when the Energy one rep costs, divided by the skill levels it would earn, exceeds the category's percentage of your max Energy. (Progression Tasks compare the rep's total cost instead — their value is progression, not XP.) Each category can be toggled off to exempt it — its Tasks then always run.");
+    setupTooltip(master, () => `Energy Thresholds: ${GAMESTATE.mods.threshold_master ? "On" : "Off"}`, () => "Skip prioritized Tasks that cost more than the category's percentage of your max Energy. Each category picks its metric: /lvl (Energy per skill level earned — \"worth it as XP?\") or /rep (the rep's total Energy — \"can I afford it?\"). Progression defaults to /rep, since its value isn't XP. Each category can be toggled off to exempt it — its Tasks then always run.");
     if (!on) {
         return;
     }
@@ -2243,7 +2249,18 @@ function setupThresholdControls(content) {
             setMod(row.enabled, !isModEnabled(row.enabled));
             refresh();
         });
-        setupTooltip(button, () => `${row.label}: ${isModEnabled(row.enabled) ? "On" : "Off"}`, () => `${row.tooltip}<br><br>On: skip these Tasks when ${row.absolute ? "one rep" : "one skill level"} costs more than the set percentage of max Energy. Off: these Tasks are exempt and always run.`);
+        setupTooltip(button, () => `${row.label}: ${isModEnabled(row.enabled) ? "On" : "Off"}`, () => `${row.tooltip}<br><br>On: skip these Tasks when ${isModEnabled(row.absolute) ? "one rep" : "one skill level"} costs more than the set percentage of max Energy. Off: these Tasks are exempt and always run.`);
+        const mode_button = createChildElement(row_div, "button");
+        mode_button.classList.add("threshold-mode");
+        function refreshMode() {
+            mode_button.textContent = isModEnabled(row.absolute) ? "/rep" : "/lvl";
+        }
+        refreshMode();
+        mode_button.addEventListener("click", () => {
+            setMod(row.absolute, !isModEnabled(row.absolute));
+            refreshMode();
+        });
+        setupTooltip(mode_button, () => `Metric: % of max Energy ${isModEnabled(row.absolute) ? "per rep" : "per skill level"}`, () => "What the percentage measures for this category.<br><br>/lvl: Energy one rep costs divided by the skill levels it would earn — \"is this worth the Energy as XP?\". Beware on progression-style Tasks: a high skill level makes this explode.<br>/rep: the rep's total Energy cost — \"can I afford to just do this?\".");
         createNumericInput(row_div, {
             min: 1,
             max: 1000,

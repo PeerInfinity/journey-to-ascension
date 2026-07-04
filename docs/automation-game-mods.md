@@ -83,13 +83,21 @@ Auto-use of Artifacts is deliberately **not** applied to synthetic tasks
 
 ## How the Energy Thresholds decide
 
-With **Energy Thresholds** on, automation skips a prioritized task when the
-energy one rep costs, divided by the (fractional) skill levels that rep would
-earn at your current skill state, exceeds a percentage of your **max energy**.
-The idea: "I'm willing to spend at most T% of my max energy to earn one level
-from this kind of task." One priority list then serves the whole prestige cycle
-— cheap tasks pass everywhere early after a prestige; late in a run only
-worthwhile tasks run.
+With **Energy Thresholds** on, automation skips a prioritized task when it
+costs more than a percentage of your **max energy**, where each category picks
+what "costs" means via its **/lvl · /rep metric switch**:
+
+- **/lvl** — the energy one rep costs, divided by the (fractional) skill
+  levels that rep would earn at your current skill state. The idea: "I'm
+  willing to spend at most T% of my max energy to earn one level from this
+  kind of task." Right for XP-valued tasks — but beware on purpose-driven
+  ones: once a skill far outlevels a task's XP, levels-per-rep tends to zero
+  and this metric explodes.
+- **/rep** — the rep's total energy cost: "don't do this if one rep costs
+  more than T% of my max energy." Right for tasks whose value isn't XP.
+
+One priority list then serves the whole prestige cycle — cheap tasks pass
+everywhere early after a prestige; late in a run only worthwhile tasks run.
 
 Each task is classified into exactly one category (first match wins), each with
 its own threshold percentage and toggle. **A disabled category is exempt — its
@@ -102,12 +110,11 @@ tasks always run.**
 2. **New Perk (out of reach)** — awards an unearned perk, but finishing it does
    *not* fit this cycle even with your Artifacts.
 3. **Awards an Item** — grants an Item on each rep.
-4. **Progression** — Travel, Mandatory, and Prestige tasks. **Judged on the
-   rep's absolute energy cost** (skip when one rep costs more than T% of max
-   energy) rather than energy-per-level: their value is progression, not XP,
-   and a per-level metric explodes once the task's skill outlevels early-zone
-   XP — a farmed-up skill would make an old zone's Travel task look
-   infinitely expensive per level and strand the run there.
+4. **Progression** — Travel, Mandatory, and Prestige tasks. **Defaults to
+   /rep**: their value is progression, not XP, and the /lvl metric would
+   explode once the task's skill outlevels early-zone XP — a farmed-up skill
+   would make an old zone's Travel task look infinitely expensive per level
+   and strand the run there. (All other categories default to /lvl.)
 5. **Unlocks a Task** — finishing it unlocks another task.
 6. **Everything else.**
 
