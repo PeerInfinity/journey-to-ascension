@@ -1757,7 +1757,8 @@ function isPerkTaskAffordableThisCycle(task) {
 }
 // Game Mod — energy-per-level thresholds. A prioritized task is skipped when
 // earning one skill level from it costs more than the configured percentage
-// of max energy. Each category has its own threshold and can be individually
+// of max energy (progression tasks instead compare the rep's absolute cost —
+// see below). Each category has its own threshold and can be individually
 // disabled; a disabled category is EXEMPT (its tasks always run). Synthetic
 // and skill-less tasks earn no levels and are always exempt.
 export function isThresholdSkipped(task) {
@@ -1767,17 +1768,27 @@ export function isThresholdSkipped(task) {
     if (isSyntheticTask(task) || task.task_definition.skills.length == 0) {
         return false;
     }
-    const keys = THRESHOLD_MOD_KEYS[getThresholdCategory(task)];
+    const category = getThresholdCategory(task);
+    const keys = THRESHOLD_MOD_KEYS[category];
     if (!GAMESTATE.mods[keys.enabled]) {
         return false;
+    }
+    const threshold_pct = GAMESTATE.mods[keys.pct];
+    const budget = (threshold_pct / 100) * GAMESTATE.max_energy;
+    const cost = calcTaskEnergyCost(task, false, false);
+    // Progression tasks (Travel/Mandatory/Prestige) are judged on the rep's
+    // ABSOLUTE energy cost, not energy-per-level: their value is progression,
+    // not XP, and a per-level metric inevitably explodes once the task's
+    // skill outgrows early-zone XP (a farmed-up Charisma made zone 1's Travel
+    // task look infinitely expensive per level and stranded the run).
+    if (category == "progression") {
+        return cost > budget;
     }
     const expected_levels = calcExpectedLevels(task);
     if (expected_levels <= 0) {
         return true;
     }
-    const cost_per_level = calcTaskEnergyCost(task, false, false) / expected_levels;
-    const threshold_pct = GAMESTATE.mods[keys.pct];
-    return cost_per_level > (threshold_pct / 100) * GAMESTATE.max_energy;
+    return cost / expected_levels > budget;
 }
 // Everything runnable was threshold-skipped. Automation would otherwise idle
 // forever — no running task means no energy drain, so the run never ends. If

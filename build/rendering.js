@@ -2188,9 +2188,10 @@ const THRESHOLD_ROWS = [
     },
     {
         label: "Progression",
-        tooltip: "Travel, Mandatory, and Prestige Tasks — the ones required to reach the next Zone.",
+        tooltip: "Travel, Mandatory, and Prestige Tasks — the ones required to reach the next Zone. Judged on the rep's total Energy cost rather than Energy per level: their value is progression, not XP.",
         enabled: "threshold_progression_enabled",
         pct: "threshold_progression_pct",
+        absolute: true,
     },
     {
         label: "Unlocks a Task",
@@ -2214,7 +2215,7 @@ function setupThresholdControls(content) {
         setMod("threshold_master", !GAMESTATE.mods.threshold_master);
         setupControls(); // rebuild: shows/hides the per-category rows
     });
-    setupTooltip(master, () => `Energy Thresholds: ${GAMESTATE.mods.threshold_master ? "On" : "Off"}`, () => "Skip prioritized Tasks that aren't worth their Energy: when the Energy one rep costs, divided by the skill levels it would earn, exceeds the category's percentage of your max Energy. Each category can be toggled off to exempt it — its Tasks then always run.");
+    setupTooltip(master, () => `Energy Thresholds: ${GAMESTATE.mods.threshold_master ? "On" : "Off"}`, () => "Skip prioritized Tasks that aren't worth their Energy: when the Energy one rep costs, divided by the skill levels it would earn, exceeds the category's percentage of your max Energy. (Progression Tasks compare the rep's total cost instead — their value is progression, not XP.) Each category can be toggled off to exempt it — its Tasks then always run.");
     if (!on) {
         return;
     }
@@ -2242,7 +2243,7 @@ function setupThresholdControls(content) {
             setMod(row.enabled, !isModEnabled(row.enabled));
             refresh();
         });
-        setupTooltip(button, () => `${row.label}: ${isModEnabled(row.enabled) ? "On" : "Off"}`, () => `${row.tooltip}<br><br>On: skip these Tasks when one skill level costs more than the set percentage of max Energy. Off: these Tasks are exempt and always run.`);
+        setupTooltip(button, () => `${row.label}: ${isModEnabled(row.enabled) ? "On" : "Off"}`, () => `${row.tooltip}<br><br>On: skip these Tasks when ${row.absolute ? "one rep" : "one skill level"} costs more than the set percentage of max Energy. Off: these Tasks are exempt and always run.`);
         createNumericInput(row_div, {
             min: 1,
             max: 1000,

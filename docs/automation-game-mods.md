@@ -102,7 +102,12 @@ tasks always run.**
 2. **New Perk (out of reach)** — awards an unearned perk, but finishing it does
    *not* fit this cycle even with your Artifacts.
 3. **Awards an Item** — grants an Item on each rep.
-4. **Progression** — Travel, Mandatory, and Prestige tasks.
+4. **Progression** — Travel, Mandatory, and Prestige tasks. **Judged on the
+   rep's absolute energy cost** (skip when one rep costs more than T% of max
+   energy) rather than energy-per-level: their value is progression, not XP,
+   and a per-level metric explodes once the task's skill outlevels early-zone
+   XP — a farmed-up skill would make an old zone's Travel task look
+   infinitely expensive per level and strand the run there.
 5. **Unlocks a Task** — finishing it unlocks another task.
 6. **Everything else.**
 

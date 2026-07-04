@@ -2603,7 +2603,7 @@ function setupEditPrioritiesControl(content: Element) {
 // skill level earned exceeds a per-category percentage of max Energy. One row
 // per category: a toggle (Off = that category is exempt and always runs) and
 // the percentage. Categories match getThresholdCategory's precedence order.
-const THRESHOLD_ROWS: { label: string; tooltip: string; enabled: keyof GameMods; pct: keyof GameMods }[] = [
+const THRESHOLD_ROWS: { label: string; tooltip: string; enabled: keyof GameMods; pct: keyof GameMods; absolute?: boolean }[] = [
     {
         label: "New Perk (finishable)",
         tooltip: "Tasks that award a Perk you haven't earned this Prestige, when finishing all remaining reps fits in your current Energy — counting the speed-up your held Scrolls of Haste (and, for Bosses, Bottled Lightning) could provide.",
@@ -2624,9 +2624,10 @@ const THRESHOLD_ROWS: { label: string; tooltip: string; enabled: keyof GameMods;
     },
     {
         label: "Progression",
-        tooltip: "Travel, Mandatory, and Prestige Tasks — the ones required to reach the next Zone.",
+        tooltip: "Travel, Mandatory, and Prestige Tasks — the ones required to reach the next Zone. Judged on the rep's total Energy cost rather than Energy per level: their value is progression, not XP.",
         enabled: "threshold_progression_enabled",
         pct: "threshold_progression_pct",
+        absolute: true,
     },
     {
         label: "Unlocks a Task",
@@ -2652,7 +2653,7 @@ function setupThresholdControls(content: Element) {
         setupControls(); // rebuild: shows/hides the per-category rows
     });
     setupTooltip(master, () => `Energy Thresholds: ${GAMESTATE.mods.threshold_master ? "On" : "Off"}`, () =>
-        "Skip prioritized Tasks that aren't worth their Energy: when the Energy one rep costs, divided by the skill levels it would earn, exceeds the category's percentage of your max Energy. Each category can be toggled off to exempt it — its Tasks then always run.");
+        "Skip prioritized Tasks that aren't worth their Energy: when the Energy one rep costs, divided by the skill levels it would earn, exceeds the category's percentage of your max Energy. (Progression Tasks compare the rep's total cost instead — their value is progression, not XP.) Each category can be toggled off to exempt it — its Tasks then always run.");
 
     if (!on) {
         return;
@@ -2686,7 +2687,7 @@ function setupThresholdControls(content: Element) {
             refresh();
         });
         setupTooltip(button, () => `${row.label}: ${isModEnabled(row.enabled) ? "On" : "Off"}`, () =>
-            `${row.tooltip}<br><br>On: skip these Tasks when one skill level costs more than the set percentage of max Energy. Off: these Tasks are exempt and always run.`);
+            `${row.tooltip}<br><br>On: skip these Tasks when ${row.absolute ? "one rep" : "one skill level"} costs more than the set percentage of max Energy. Off: these Tasks are exempt and always run.`);
 
         createNumericInput(row_div, {
             min: 1,
