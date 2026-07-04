@@ -33,6 +33,7 @@ save from before a mod existed simply gets that mod off.
 | **Use Free Items** | Even on cycles where Auto Use Items is off, use Items you can spend *without reducing how many you keep* on the next reset (the surplus left by keep-rounding). Artifacts are excluded. |
 | **Artifact Tasks: Item Cycles Only** | Only run scheduled artifact tasks while Auto Use Items is enabled (see [artifact-tasks.md](artifact-tasks.md)). |
 | **Auto Dreamcatcher** | Use a held Dreamcatcher before a task rep that would consume at least a set percentage of current energy (default 25%) — i.e. late in the run, when its "duplicate everything found this reset" effect is near its biggest. One per qualifying rep; only while Auto Use Items is enabled. |
+| **Auto Magic Ring** | Spend held Magic Rings (5× XP for one rep) on the tasks where they help most, ranked from last run's completions. Tasks ranked within the Ring budget (held + already spent this run) each get one Ring; Rings found mid-run widen the budget. Needs one completed run of history; only while Auto Use Items is enabled. |
 | **Energy Thresholds** | Skip prioritized tasks that aren't worth their energy — per-category energy-per-level thresholds; see below. |
 | **End Run When All Skipped** | (Under Energy Thresholds) When every remaining prioritized task is over its threshold, trigger the Energy Reset instead of idling. |
 
@@ -50,6 +51,21 @@ cheap) reps.
 On an expensive Boss with both tools enabled, **Bottled Lightning is applied
 first**, then Auto Scroll of Haste re-checks and only adds a Scroll if the rep is
 *still* unaffordable.
+
+**Auto Magic Ring** can't use an affordability trigger either — a Ring is 5×
+XP for one rep, so it should go to the rep that converts XP into the most
+levels, and future skill states are unknowable. Instead the game records every
+task started this run with the extra levels a Ring *would* have earned (from
+the skill state at rep start), keeps the successfully completed ones at the
+energy reset, and ranks them. When a ranked task starts, it gets a Ring if its
+rank fits the **Ring budget**: Rings currently held plus Rings already spent
+this run (so spending never shrinks the window, and a Ring found mid-run
+widens it immediately — important early game, where Rings don't survive the
+reset cull and must be spent the run they're found). One Ring per task per
+run. The plan and its spent marks persist in the save (no double-spend on
+reload) and are wiped on prestige, where skills reset and all Rings are lost
+anyway. On the first run after a prestige (or before any history exists) the
+feature simply waits.
 
 **Auto Dreamcatcher** uses a different trigger, because a Dreamcatcher doesn't
 speed anything up — it duplicates one copy of every Item type found this energy
@@ -103,9 +119,13 @@ a notification appears and automation idles.
 
 - **State / defaults:** `GameMods` interface and `defaultMods()` in
   `simulation.ts`; merged over defaults on load (`{ ...defaultMods(), ...saved }`).
-- **Auto artifacts:** `maybeAutoUseHaste()`, `maybeAutoUseLightning()`, and
-  `maybeAutoUseDreamcatcher()`, called from `applyTaskRepStartEffects()`;
-  Dreamcatcher UI in `setupAutoDreamcatcherControl()` (`rendering.ts`).
+- **Auto artifacts:** `maybeAutoUseHaste()`, `maybeAutoUseLightning()`,
+  `maybeAutoUseDreamcatcher()`, and `maybeAutoUseRing()`, called from
+  `applyTaskRepStartEffects()`; Dreamcatcher UI in
+  `setupAutoDreamcatcherControl()` (`rendering.ts`).
+- **Run task history / Ring plan:** `RunTaskRecord`, `recordRunTaskHistory()`,
+  `buildRingPlan()`; rotation in `doEnergyReset()`, completion marking in
+  `applyFinishTaskRepEffects()`, wipe in `doPrestige()`.
 - **Cycles:** `applyResetCycle()` → `applyAutoUseCycle()` (and `applyQueueCycle()`).
 - **Free items:** `maybeUseRoundingErrorItem()`.
 - **Energy thresholds:** `isThresholdSkipped()` / `getThresholdCategory()` /

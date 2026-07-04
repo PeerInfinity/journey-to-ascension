@@ -2480,6 +2480,11 @@ const ADVANCED_AUTOMATION_TOGGLES: { label: string; tooltip: string; mod: keyof 
         mod: "auto_lightning",
     },
     {
+        label: "Auto Magic Ring",
+        tooltip: "Automatically spend held Magic Rings (5x XP for one rep) where they help most: the Tasks you completed last run are ranked by how many extra skill levels a Ring would have earned, and Tasks ranked within your Ring budget (Rings held plus Rings already spent this run) each get one Ring when they start. Rings found mid-run widen the budget immediately. Needs one completed run of history; only acts while Auto Use Items is enabled.",
+        mod: "auto_ring",
+    },
+    {
         label: "Use Free Items",
         tooltip: "Even on cycles where Auto Use Items is off, automatically use Items you can spend without reducing how many you keep on the next Energy Reset (the surplus left by the keep rounding). Each Item is used once the last Task rep that could grant it this cycle has finished, so its kept count is unaffected. Artifacts (such as Scrolls of Haste) are excluded.",
         mod: "auto_use_free_items",

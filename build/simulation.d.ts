@@ -96,6 +96,12 @@ export declare function calcAttunementGain(task: Task): number;
 export declare function calcAttunementSkills(): SkillType[];
 export declare function getPowerSkills(): SkillType[];
 export declare function getSpiteTheGodsSkills(): SkillType[];
+export interface RunTaskRecord {
+    zone_id: number;
+    task_id: number;
+    extra_levels_if_ringed: number;
+    completed: boolean;
+}
 export type ThresholdCategory = "perk_affordable" | "perk_unaffordable" | "item" | "progression" | "unlocker" | "other";
 export declare function getThresholdCategory(task: Task): ThresholdCategory;
 export declare function isThresholdSkipped(task: Task): boolean;
@@ -146,6 +152,7 @@ export interface GameMods {
     queue_cycle: boolean;
     auto_dreamcatcher: boolean;
     auto_dreamcatcher_pct: number;
+    auto_ring: boolean;
     threshold_master: boolean;
     threshold_end_run: boolean;
     threshold_perk_affordable_enabled: boolean;
@@ -177,6 +184,10 @@ export declare class Gamestate {
     queue_configs: QueueConfig[];
     active_queue_index: number;
     queue_runs_on_current: number;
+    run_task_history: RunTaskRecord[];
+    last_run_task_history: RunTaskRecord[];
+    ring_plan: string[];
+    ring_plan_used: string[];
     current_zone: number;
     highest_zone: number;
     highest_zone_fully_completed: number;

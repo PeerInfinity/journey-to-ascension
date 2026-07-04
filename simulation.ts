@@ -537,6 +537,40 @@ function maybeAutoUseLightning(task: Task) {
     }
 }
 
+// Game Mod — Auto Magic Ring. A Ring is 5x XP for one rep, so it should go to
+// the task where one rep converts that XP into the most skill levels. Future
+// skill states are unknowable, so the ranking comes from last run's completed
+// tasks (see buildRingPlan): when a planned task starts, a Ring is held, and
+// the task ranks within the top K of the plan — K = Rings held plus Rings
+// already spent this run, so spending never shrinks the window and a Ring
+// found mid-run widens it immediately — queue one, the same consumption path
+// as a manually-used Ring. One Ring per planned task per run (ring_plan_used).
+function maybeAutoUseRing(task: Task) {
+    if (!GAMESTATE.mods.auto_ring) {
+        return;
+    }
+    // Same gating as the other auto-artifact tools: only while item auto-use
+    // is on, and never stacking on top of an already-queued Ring.
+    if (!GAMESTATE.auto_use_items || GAMESTATE.queued_magic_rings > 0) {
+        return;
+    }
+    const rings_held = GAMESTATE.items.get(ItemType.MagicRing) ?? 0;
+    if (rings_held <= 0) {
+        return;
+    }
+    const key = runTaskKey(task.task_definition.zone_id, task.task_definition.id);
+    if (GAMESTATE.ring_plan_used.includes(key)) {
+        return;
+    }
+    const rank = GAMESTATE.ring_plan.indexOf(key);
+    if (rank < 0 || rank >= rings_held + GAMESTATE.ring_plan_used.length) {
+        return;
+    }
+    GAMESTATE.ring_plan_used.push(key);
+    useItem(ItemType.MagicRing, 1);
+    disableItemUndo();
+}
+
 // Game Mod — Auto Dreamcatcher. A Dreamcatcher duplicates one copy of every
 // Item type found this energy reset, so it's most valuable as late in the run
 // as possible. Proxy for "late": the next rep would consume at least the
@@ -576,6 +610,8 @@ export function applyTaskRepStartEffects(task: Task) {
     // exit tasks are instant and skill-less, so applying them just wastes the
     // queued Artifact. Keep them for the next real task.
     if (!isSyntheticTask(task)) {
+        recordRunTaskHistory(task);
+        maybeAutoUseRing(task);
         maybeAutoUseLightning(task);
         maybeAutoUseHaste(task);
         maybeAutoUseDreamcatcher(task);
@@ -712,6 +748,15 @@ function applyFinishTaskRepEffects(task: Task) {
         artifact_spec.done = true;
         useItem(artifact_spec.item, 1);
         disableItemUndo();
+    }
+
+    // Run task history: only successfully completed reps count toward the
+    // next run's Magic Ring plan. Free completions (Mastery of Time) never
+    // recorded a start, so the find can miss — that's fine.
+    const history_record = GAMESTATE.run_task_history.find(
+        (r) => r.zone_id == task.task_definition.zone_id && r.task_id == task.task_definition.id);
+    if (history_record) {
+        history_record.completed = true;
     }
 }
 
@@ -1056,6 +1101,13 @@ export function doEnergyReset() {
     }
     GAMESTATE.energy_reset_count += 1;
     handleEnergyResetItemCounts();
+
+    // Rotate the per-run task history and rank the new run's Magic Ring plan
+    // from last run's completions.
+    GAMESTATE.last_run_task_history = GAMESTATE.run_task_history.filter((r) => r.completed);
+    GAMESTATE.run_task_history = [];
+    buildRingPlan();
+
     storeLoopStartNumbersForNextGameOver();
     skipFreeZones();
 
@@ -1943,6 +1995,60 @@ export function getSpiteTheGodsSkills() {
     return [SkillType.Ascension, SkillType.Charisma];
 }
 
+// MARK: Run Task History / Auto Magic Ring (Game Mod)
+
+// One entry per real task started this run. extra_levels_if_ringed is the
+// extra (fractional) skill levels a Magic Ring (MAGIC_RING_MULT x XP for one
+// rep) would have earned over an unboosted rep, measured from the skill state
+// at rep start — the only moment that state is observable. Field is task_id,
+// not "id", so the save replacer doesn't collapse the record.
+export interface RunTaskRecord {
+    zone_id: number;
+    task_id: number;
+    extra_levels_if_ringed: number;
+    completed: boolean;
+}
+
+function runTaskKey(zone_id: number, task_id: number): string {
+    return `${zone_id}:${task_id}`;
+}
+
+function recordRunTaskHistory(task: Task) {
+    const def = task.task_definition;
+    if (def.skills.length == 0) {
+        return; // no skills, no levels — nothing a Ring could boost
+    }
+
+    const xp = calcSkillXp(task, calcTaskCost(task), true);
+    let extra = 0;
+    for (const skill_type of def.skills) {
+        extra += calcFractionalLevelsFromXp(skill_type, xp * MAGIC_RING_MULT)
+            - calcFractionalLevelsFromXp(skill_type, xp);
+    }
+
+    let record = GAMESTATE.run_task_history.find((r) => r.zone_id == def.zone_id && r.task_id == def.id);
+    if (!record) {
+        record = { zone_id: def.zone_id, task_id: def.id, extra_levels_if_ringed: 0, completed: false };
+        GAMESTATE.run_task_history.push(record);
+    }
+    // A task can rep several times a run; keep its best Ring opportunity.
+    record.extra_levels_if_ringed = Math.max(record.extra_levels_if_ringed, extra);
+}
+
+// Called once per energy reset: ALL of last run's completed tasks, ranked by
+// Ring value. Deliberately not truncated to the Rings held at reset — without
+// the keep-items prestige unlock every Ring is culled at the reset, so Rings
+// are typically found and spent within the same run; maybeAutoUseRing instead
+// applies a dynamic top-K window (K = held + already spent) at spend time.
+// The plan persists in the save so a mid-run reload neither re-plans nor
+// re-spends.
+function buildRingPlan() {
+    GAMESTATE.ring_plan_used = [];
+    GAMESTATE.ring_plan = [...GAMESTATE.last_run_task_history]
+        .sort((a, b) => b.extra_levels_if_ringed - a.extra_levels_if_ringed)
+        .map((r) => runTaskKey(r.zone_id, r.task_id));
+}
+
 // MARK: Energy Thresholds (Game Mod)
 
 // Category of a task for the energy-per-level threshold filter. First match
@@ -2421,6 +2527,13 @@ export function doPrestige() {
     }
     GAMESTATE.unlocked_new_prestige_this_prestige = false;
 
+    // Prestige changes the XP/level balance (skills reset to aptitude base)
+    // and wipes all Rings, so pre-prestige Ring history would only mislead.
+    GAMESTATE.run_task_history = [];
+    GAMESTATE.last_run_task_history = [];
+    GAMESTATE.ring_plan = [];
+    GAMESTATE.ring_plan_used = [];
+
     // Re-apply mods after the perk wipe so force_automation re-grants the
     // Amulet that gates automation and auto-use.
     applyMods();
@@ -2612,6 +2725,7 @@ export interface GameMods {
     queue_cycle: boolean;                // cycle through saved automation queues, one per energy reset
     auto_dreamcatcher: boolean;          // auto-use Dreamcatchers late in the run
     auto_dreamcatcher_pct: number;       // fire when the next rep costs >= this % of current energy
+    auto_ring: boolean;                  // spend Magic Rings on last run's best level-gain tasks
 
     // Energy Thresholds — skip prioritized tasks whose energy cost per skill
     // level earned exceeds the category's percentage of max energy. A
@@ -2650,6 +2764,7 @@ export function defaultMods(): GameMods {
         queue_cycle: false,
         auto_dreamcatcher: false,
         auto_dreamcatcher_pct: 25,
+        auto_ring: false,
         threshold_master: false,
         threshold_end_run: false,
         threshold_perk_affordable_enabled: false,
@@ -2756,6 +2871,15 @@ export class Gamestate {
     queue_configs: QueueConfig[] = [];
     active_queue_index = 0;
     queue_runs_on_current = 0;
+
+    // Run task history / Auto Magic Ring (Game Mod): tasks started this run
+    // and last run's completions, plus the current run's Ring plan (keys from
+    // runTaskKey) and which planned keys already got a Ring. All persisted so
+    // a mid-run reload neither re-plans nor double-spends; wiped on prestige.
+    run_task_history: RunTaskRecord[] = [];
+    last_run_task_history: RunTaskRecord[] = [];
+    ring_plan: string[] = [];
+    ring_plan_used: string[] = [];
 
     current_zone: number = 0;
     highest_zone: number = 0;
