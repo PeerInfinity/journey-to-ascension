@@ -119,6 +119,12 @@ export declare enum AutomationMode {
     Off = 2
 }
 export declare function toggleAutomation(task: TaskDefinition): void;
+export declare const AUTO_FILL_CATEGORIES: readonly ["item", "perk", "prestige", "unlocker", "plain", "mandatory", "travel"];
+export type AutoFillCategory = (typeof AUTO_FILL_CATEGORIES)[number];
+export declare function defaultAutoFillOrder(): AutoFillCategory[];
+export declare function getAutoFillOrder(): AutoFillCategory[];
+export declare function moveAutoFillCategory(category: AutoFillCategory, delta: number): void;
+export declare function resetAutoFillOrder(): void;
 export declare function autoFillPriorities(zone_id: number): void;
 export declare function autoFillAllPriorities(): void;
 export declare function setAutomationMode(mode: AutomationMode): void;
@@ -211,6 +217,8 @@ export declare class Gamestate {
     run_history_by_context: Record<string, RunTaskRecord[]>;
     ring_plan: string[];
     ring_plan_used: string[];
+    auto_fill_order: string[];
+    auto_fill_order_collapsed: boolean;
     current_zone: number;
     highest_zone: number;
     highest_zone_fully_completed: number;

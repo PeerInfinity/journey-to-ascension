@@ -2448,38 +2448,93 @@ export function toggleAutomation(task: TaskDefinition) {
 
 // MARK: Auto-Fill Priorities (Game Mod)
 
-// Heuristic order groups for autoFillPriorities; lower group runs earlier.
-// Resources first; then unearned perks — the frontier value; the threshold
-// filter handles skipping ones that aren't currently worth it (user ruling);
-// then Prestige tasks — one-shot, cheap for their zone, and completing them
-// early gives prestige availability (plus discovery spark every run with
-// that mod), while the collected items boost the attempt; then opening the
-// task graph, then pure XP by yield. Earned perks demote to the plain group,
-// BELOW prestige (user ruling). Mandatory and Travel close the list — the
-// same travel-last invariant toggleAutomation maintains.
-function autoFillGroup(def: TaskDefinition): number {
+// Ordering categories for autoFillPriorities. The GROUP ORDER is player-
+// configurable (auto_fill_order; default below): resources first; then
+// unearned perks — the frontier value; the threshold filter handles skipping
+// ones that aren't currently worth it (user ruling); then Prestige tasks —
+// one-shot, cheap for their zone, and completing them early gives prestige
+// availability (plus discovery spark every run with that mod), while the
+// collected items boost the attempt; then opening the task graph, then pure
+// XP by yield. Earned perks demote to the plain group, BELOW prestige (user
+// ruling). Mandatory and Travel close the default list — the same
+// travel-last invariant toggleAutomation maintains.
+export const AUTO_FILL_CATEGORIES = ["item", "perk", "prestige", "unlocker", "plain", "mandatory", "travel"] as const;
+export type AutoFillCategory = (typeof AUTO_FILL_CATEGORIES)[number];
+
+export function defaultAutoFillOrder(): AutoFillCategory[] {
+    return [...AUTO_FILL_CATEGORIES];
+}
+
+// The saved order, sanitized against the canonical set: known keys keep
+// their saved order (first occurrence wins), unknown keys drop, missing
+// keys append in default order — so a category added in a later version
+// lands at the end of an old save's list instead of nowhere.
+export function getAutoFillOrder(): AutoFillCategory[] {
+    const saved = Array.isArray(GAMESTATE.auto_fill_order) ? GAMESTATE.auto_fill_order : [];
+    const order: AutoFillCategory[] = [];
+    for (const key of saved) {
+        if ((AUTO_FILL_CATEGORIES as readonly string[]).includes(key) && !order.includes(key as AutoFillCategory)) {
+            order.push(key as AutoFillCategory);
+        }
+    }
+    for (const key of AUTO_FILL_CATEGORIES) {
+        if (!order.includes(key)) {
+            order.push(key);
+        }
+    }
+    return order;
+}
+
+export function moveAutoFillCategory(category: AutoFillCategory, delta: number) {
+    const order = getAutoFillOrder();
+    const from = order.indexOf(category);
+    const to = from + (delta < 0 ? -1 : 1);
+    if (from < 0 || to < 0 || to >= order.length) {
+        return;
+    }
+    order.splice(from, 1);
+    order.splice(to, 0, category);
+    GAMESTATE.auto_fill_order = order;
+    afterAutoFillOrderChange();
+}
+
+export function resetAutoFillOrder() {
+    GAMESTATE.auto_fill_order = defaultAutoFillOrder();
+    afterAutoFillOrderChange();
+}
+
+// A changed order takes effect immediately under the autopilot (no-op
+// otherwise — the next Auto-Fill click uses it).
+function afterAutoFillOrderChange() {
+    maybeAutoPrioritizeAll();
+    saveGame();
+}
+
+// Which ordering category a task falls into. Classification precedence is
+// fixed (only the group ORDER is configurable): perk/unlocker track live
+// state like getThresholdCategory — once the perk is earned or the target
+// unlocked, the task sorts as a plain XP task instead of keeping its spent
+// purpose slot.
+function autoFillCategory(def: TaskDefinition): AutoFillCategory {
     if (def.type == TaskType.Travel) {
-        return 6;
+        return "travel";
     }
     if (def.type == TaskType.Mandatory) {
-        return 5;
+        return "mandatory";
     }
     if (def.item != ItemType.Count) {
-        return 0;
+        return "item";
     }
-    // Like getThresholdCategory, perk/unlocker grouping tracks live state:
-    // once the perk is earned or the target unlocked, the task sorts as a
-    // plain XP task (by yield) instead of keeping its spent purpose slot.
     if (def.perk != PerkType.Count && !hasPerk(def.perk)) {
-        return 1;
+        return "perk";
     }
     if (def.type == TaskType.Prestige) {
-        return 2;
+        return "prestige";
     }
     if (def.unlocks_task >= 0 && !GAMESTATE.unlocked_tasks.includes(def.unlocks_task)) {
-        return 3;
+        return "unlocker";
     }
-    return 4;
+    return "plain";
 }
 
 export function autoFillPriorities(zone_id: number) {
@@ -2488,6 +2543,7 @@ export function autoFillPriorities(zone_id: number) {
         return;
     }
 
+    const order = getAutoFillOrder();
     const entries: { id: number; group: number; metric: number }[] = [];
     for (const def of zone.tasks) {
         if (def.hidden_by_default && !GAMESTATE.unlocked_tasks.includes(def.id)) {
@@ -2500,12 +2556,13 @@ export function autoFillPriorities(zone_id: number) {
         const live = GAMESTATE.tasks.find((t) => t.task_definition.id == def.id);
         const task = live ?? new Task(def);
 
-        const group = autoFillGroup(def);
+        const category = autoFillCategory(def);
+        const group = order.indexOf(category);
         let metric = 0;
-        if (group == 1) {
+        if (category == "perk") {
             // Perk tasks: cheapest-to-finish first, so reachable perks come early.
             metric = calcTaskEnergyCost(task, false, false) * Math.max(1, def.max_reps - task.reps);
-        } else if (group == 4) {
+        } else if (category == "plain") {
             // Plain tasks: most skill levels per energy first (negated for the
             // ascending sort). The Energy Thresholds filter re-judges these
             // live, so this order only has to be a sensible starting shape.
@@ -3285,6 +3342,11 @@ export class Gamestate {
     ring_plan: string[] = [];
     ring_plan_used: string[] = [];
 
+    // Auto-Fill Priorities (Game Mod): player-configurable category order,
+    // sanitized on read by getAutoFillOrder(). Stored as plain strings.
+    auto_fill_order: string[] = defaultAutoFillOrder();
+    auto_fill_order_collapsed = true;
+
     current_zone: number = 0;
     highest_zone: number = 0;
     highest_zone_fully_completed: number = -1;
@@ -3585,6 +3647,12 @@ export function updateGamestate() {
 (window as any).getQueueConfigs = () => ({ active: getActiveQueueIndex(), configs: getQueueConfigs() });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).autoFillPriorities = () => { autoFillAllPriorities(); RENDERING.createTasks(); return { success: true }; };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).getAutoFillOrder = () => getAutoFillOrder();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).moveAutoFillCategory = (category: string, delta: number) => { moveAutoFillCategory(category as AutoFillCategory, delta); RENDERING.createTasks(); return { success: true, order: getAutoFillOrder() }; };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).resetAutoFillOrder = () => { resetAutoFillOrder(); RENDERING.createTasks(); return { success: true, order: getAutoFillOrder() }; };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).addQueue = () => { const i = addQueue(); RENDERING.createTasks(); return { success: true, index: i }; };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

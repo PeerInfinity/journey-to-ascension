@@ -1,5 +1,5 @@
 import { Task, TaskDefinition, ZONES, TaskType, PERKS_BY_ZONE, ITEMS_BY_ZONE } from "./zones.js";
-import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, getBossEnergyDisparityLimit, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId, getQueueConfigs, getActiveQueueIndex, getQueueRunsOnCurrent, advanceQueueCycle, addQueue, removeQueue, setQueueAutoUseMode, getQueueExcludedItems, addQueueExcludedItem, removeQueueExcludedItem, setQueueRepeatCount, setQueueName, moveQueue, setActiveQueue, isEditMode, enterEditMode, exitEditMode, setEditZone, getEditMaxZone, autoFillAllPriorities, THRESHOLD_METRIC_REP, THRESHOLD_METRIC_RESETS, THRESHOLD_ALL_SKIPPED_IDLE, type AutoUseMode, type GameMods } from "./simulation.js";
+import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, getBossEnergyDisparityLimit, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId, getQueueConfigs, getActiveQueueIndex, getQueueRunsOnCurrent, advanceQueueCycle, addQueue, removeQueue, setQueueAutoUseMode, getQueueExcludedItems, addQueueExcludedItem, removeQueueExcludedItem, setQueueRepeatCount, setQueueName, moveQueue, setActiveQueue, isEditMode, enterEditMode, exitEditMode, setEditZone, getEditMaxZone, autoFillAllPriorities, getAutoFillOrder, moveAutoFillCategory, resetAutoFillOrder, THRESHOLD_METRIC_REP, THRESHOLD_METRIC_RESETS, THRESHOLD_ALL_SKIPPED_IDLE, type AutoUseMode, type GameMods } from "./simulation.js";
 import { GAMESTATE, RENDERING, resetSave } from "./game.js";
 import { ItemType, ItemDefinition, ITEMS, HASTE_MULT, ARTIFACTS, MAGIC_RING_MULT, BOTTLED_LIGHTNING_MULT } from "./items.js";
 import { PerkDefinition, PerkType, PERKS, getPerkNameWithEmoji } from "./perks.js";
@@ -2523,6 +2523,7 @@ function setupAdvancedAutomationControls(parent: Element) {
     setupEditPrioritiesControl(content);
     setupAutoFillControl(content);
     setupAutoPrioritizeControl(content);
+    setupAutoFillOrderControl(content);
 
     for (const toggle of ADVANCED_AUTOMATION_TOGGLES) {
         const button = createChildElement(content, "button") as HTMLButtonElement;
@@ -2763,6 +2764,77 @@ function setupAutoFillControl(content: Element) {
     });
     setupTooltip(button, () => "Auto-Fill Priorities", () =>
         "Overwrite ALL reached Zones' automation priorities with a heuristic order: Item-awarding Tasks first, then unearned Perk Tasks (cheapest to finish first), then Prestige Tasks (cheap, one-shot, and the fresh Items boost them), then Task-unlockers, then the rest by skill levels per Energy, with Mandatory and Travel last. Combine with Energy Thresholds to skip whatever isn't currently worth running, and Edit Priorities for touch-ups. Newly unlocked or newly reached content isn't added automatically — click again to include it.");
+}
+
+// Auto-Fill Order: the player-configurable category order behind Auto-Fill
+// Priorities / Auto-Prioritize. One row per category with up/down arrows;
+// reordering takes effect immediately while the autopilot is on.
+const AUTO_FILL_CATEGORY_LABELS: Record<string, { label: string; tooltip: string }> = {
+    item: { label: "Awards an Item", tooltip: "Tasks that award an Item on each rep." },
+    perk: { label: "New Perks", tooltip: "Tasks whose Perk you haven't earned this Prestige, cheapest to finish first. Earned Perks sort as Everything Else." },
+    prestige: { label: "Prestige", tooltip: "Prestige Tasks — one-shot and cheap for their Zone; early completion enables Prestige (and Discovery Spark every run, with that mod on)." },
+    unlocker: { label: "Unlocks a Task", tooltip: "Tasks whose unlock target is still locked. Once unlocked they sort by their remaining traits (usually Awards an Item)." },
+    plain: { label: "Everything Else", tooltip: "Tasks that fit no other category, ordered by skill levels per Energy." },
+    mandatory: { label: "Mandatory", tooltip: "Mandatory Tasks — required (with Prestige Tasks) before Travel unlocks." },
+    travel: { label: "Travel", tooltip: "The Zone's Travel Task. Moving this off the end makes automation leave a Zone as soon as Travel is enabled." },
+};
+
+function setupAutoFillOrderControl(content: Element) {
+    const collapsed = GAMESTATE.auto_fill_order_collapsed;
+    const header = createChildElement(content, "button") as HTMLButtonElement;
+    header.className = collapsed ? "off" : "on";
+    header.textContent = `Auto-Fill Order ${collapsed ? "▶" : "▼"}`;
+    header.addEventListener("click", () => {
+        GAMESTATE.auto_fill_order_collapsed = !GAMESTATE.auto_fill_order_collapsed;
+        setupControls();
+    });
+    setupTooltip(header, () => "Auto-Fill Order", () =>
+        "The category order Auto-Fill Priorities and Auto-Prioritize use: within each Zone, Tasks are grouped by category and the groups are laid out in this order. Rearrange with the arrows; changes apply immediately while Auto-Prioritize is on. The default is: Items, New Perks, Prestige, Unlockers, Everything Else, Mandatory, Travel.");
+
+    if (collapsed) {
+        return;
+    }
+
+    const order = getAutoFillOrder();
+    order.forEach((category, index) => {
+        const info = AUTO_FILL_CATEGORY_LABELS[category] ?? { label: category, tooltip: "" };
+        const row = createChildElement(content, "div");
+        row.className = "threshold-row";
+
+        const label = createChildElement(row, "span");
+        label.className = "auto-fill-order-label";
+        label.textContent = `${index + 1}. ${info.label}`;
+        setupTooltip(label, () => info.label, () => info.tooltip);
+
+        const up = createChildElement(row, "button") as HTMLButtonElement;
+        up.classList.add("threshold-mode");
+        up.textContent = "↑";
+        up.disabled = index == 0;
+        up.addEventListener("click", () => {
+            moveAutoFillCategory(category, -1);
+            setupControls();
+            recreateTasks(); // the autopilot may have refilled priorities
+        });
+
+        const down = createChildElement(row, "button") as HTMLButtonElement;
+        down.classList.add("threshold-mode");
+        down.textContent = "↓";
+        down.disabled = index == order.length - 1;
+        down.addEventListener("click", () => {
+            moveAutoFillCategory(category, 1);
+            setupControls();
+            recreateTasks();
+        });
+    });
+
+    const reset = createChildElement(content, "button") as HTMLButtonElement;
+    reset.className = "off";
+    reset.textContent = "Reset Order to Default";
+    reset.addEventListener("click", () => {
+        resetAutoFillOrder();
+        setupControls();
+        recreateTasks();
+    });
 }
 
 // Auto-Prioritize (Game Mod): the autopilot form of Auto-Fill Priorities.

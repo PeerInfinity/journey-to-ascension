@@ -13,6 +13,7 @@ export const CHANGELOG = [
             + "- Added Auto Magic Ring (Advanced Automation): the Tasks completed by your last comparable run are ranked by how many extra skill levels a Magic Ring would earn (at your current skills); the best ones (as many as you have Rings for, counting Rings found mid-run) each get a Ring automatically when they start this run. History is tracked per queue under Queue Cycle and per banking/spending phase under Auto Use Cycle, so unlike runs don't mislead each other<br>"
             + "- Added Auto-Fill Priorities (Advanced Automation): one click fills every reached Zone's automation priorities with a sensible order — Item Tasks, then unearned Perk Tasks (cheapest first), then Prestige Tasks (cheap and one-shot, boosted by the fresh Items), Task-unlockers, the rest by skill levels per Energy, Mandatory and Travel last<br>"
             + "- Added Auto-Prioritize (Advanced Automation): autopilot for priorities — re-runs Auto-Fill automatically at every Energy Reset and Prestige, on Task unlock, and on Zone entry. Mutually exclusive with Queue Cycle<br>"
+            + "- Added Auto-Fill Order (Advanced Automation): rearrange the category order Auto-Fill and Auto-Prioritize use (Items, New Perks, Prestige, Unlockers, Everything Else, Mandatory, Travel by default). Changes apply immediately while Auto-Prioritize is on<br>"
     },
     {
         version: "Fork 1.3",
