@@ -10,6 +10,7 @@ export const CHANGELOG: ChangelogEntry[] = [
         date: "2026-07-03",
         changes: "- Added Energy Thresholds (Advanced Automation): skip prioritized Tasks that aren't worth their Energy — when the Energy one rep costs, divided by the skill levels it earns, exceeds a percentage of your max Energy. Six Task categories (new Perk you can finish this run, new Perk out of reach, awards an Item, progression, unlocks a Task, everything else), each with its own threshold and toggle; a disabled category is exempt and always runs<br>"
         + "- Optional End Run When All Skipped: when every remaining prioritized Task is over its threshold, trigger the Energy Reset instead of idling<br>"
+        + "- Added Auto Dreamcatcher (Advanced Automation): automatically use a held Dreamcatcher before a Task rep that would consume at least a set percentage of your current Energy (default 25%), so the duplication fires late in the run when the Item haul is near its biggest<br>"
     },
     {
         version: "Fork 1.3",

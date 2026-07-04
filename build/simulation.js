@@ -441,6 +441,37 @@ function maybeAutoUseLightning(task) {
         disableItemUndo();
     }
 }
+// Game Mod — Auto Dreamcatcher. A Dreamcatcher duplicates one copy of every
+// Item type found this energy reset, so it's most valuable as late in the run
+// as possible. Proxy for "late": the next rep would consume at least the
+// configured percentage of current energy. One copy per qualifying rep start —
+// once reps start qualifying, they mostly keep qualifying (energy only
+// shrinks), so remaining copies drain naturally as the run winds down. Runs
+// after the haste/lightning decisions so the cost estimate reflects the
+// boosts that will actually apply. Unlike those tools the effect is instant
+// (the item's on_consume does the duplication; no queued counter).
+function maybeAutoUseDreamcatcher(task) {
+    if (!GAMESTATE.mods.auto_dreamcatcher) {
+        return;
+    }
+    if (!GAMESTATE.auto_use_items) {
+        return; // same banking-cycle convention as auto haste/lightning
+    }
+    if ((GAMESTATE.items.get(ItemType.Dreamcatcher) ?? 0) <= 0) {
+        return;
+    }
+    // Nothing (except Dreamcatchers) found yet — using one would duplicate nothing.
+    if (!GAMESTATE.items_found_this_energy_reset.some((item) => item != ItemType.Dreamcatcher)) {
+        return;
+    }
+    const hasted = GAMESTATE.queued_scrolls_of_haste > 0;
+    const lightning = GAMESTATE.queued_lightning > 0 && task.task_definition.type == TaskType.Boss;
+    const cost = calcTaskEnergyCost(task, hasted, lightning);
+    if (cost >= (GAMESTATE.mods.auto_dreamcatcher_pct / 100) * GAMESTATE.current_energy) {
+        useItem(ItemType.Dreamcatcher, 1);
+        disableItemUndo();
+    }
+}
 // Note that free executions don't call this
 export function applyTaskRepStartEffects(task) {
     // Artifact effects (auto-/queued Scroll of Haste, Magic Ring, Bottled
@@ -450,6 +481,7 @@ export function applyTaskRepStartEffects(task) {
     if (!isSyntheticTask(task)) {
         maybeAutoUseLightning(task);
         maybeAutoUseHaste(task);
+        maybeAutoUseDreamcatcher(task);
         if (GAMESTATE.queued_scrolls_of_haste > 0) {
             task.hasted = true;
             GAMESTATE.queued_scrolls_of_haste--;
@@ -2127,6 +2159,8 @@ export function defaultMods() {
         auto_use_free_items: false,
         artifact_tasks_item_cycle_only: false,
         queue_cycle: false,
+        auto_dreamcatcher: false,
+        auto_dreamcatcher_pct: 25,
         threshold_master: false,
         threshold_end_run: false,
         threshold_perk_affordable_enabled: false,

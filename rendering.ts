@@ -2531,9 +2531,45 @@ function setupAdvancedAutomationControls(parent: Element) {
         setupTooltip(button, () => `${toggle.label}: ${isModEnabled(toggle.mod) ? "On" : "Off"}`, () => toggle.tooltip);
     }
 
+    setupAutoDreamcatcherControl(content);
     setupAutoUseCycleControl(content);
     setupQueueCycleControl(content);
     setupThresholdControls(content);
+}
+
+// Auto Dreamcatcher (Game Mod): a toggle plus the trigger percentage. A
+// Dreamcatcher duplicates every Item type found this energy reset, so it's
+// best used late in the run; "late" is proxied by the next rep costing at
+// least this percentage of current Energy.
+function setupAutoDreamcatcherControl(content: Element) {
+    const on = GAMESTATE.mods.auto_dreamcatcher;
+    const button = createChildElement(content, "button") as HTMLButtonElement;
+    button.className = on ? "on" : "off";
+    button.textContent = `Auto Dreamcatcher: ${on ? "On" : "Off"}`;
+    button.addEventListener("click", () => {
+        setMod("auto_dreamcatcher", !GAMESTATE.mods.auto_dreamcatcher);
+        setupControls(); // rebuild: shows/hides the trigger input
+    });
+    setupTooltip(button, () => `Auto Dreamcatcher: ${GAMESTATE.mods.auto_dreamcatcher ? "On" : "Off"}`, () =>
+        "Automatically use a held Dreamcatcher (duplicates one copy of every Item type found this Energy Reset) before a Task rep that would consume at least the set percentage of your current Energy — i.e. when the run is winding down and the haul is near its biggest. One Dreamcatcher per qualifying rep. Only acts while Auto Use Items is enabled.");
+
+    if (!on) {
+        return;
+    }
+
+    const label = createChildElement(content, "label");
+    label.className = "advanced-automation-label";
+    label.textContent = "Trigger at % of current Energy:";
+
+    createNumericInput(label, {
+        min: 1,
+        max: 100,
+        initialValue: GAMESTATE.mods.auto_dreamcatcher_pct,
+        ariaLabel: "Auto Dreamcatcher trigger, % of current Energy the next rep would consume",
+        onChange: (value) => {
+            setMod("auto_dreamcatcher_pct", value);
+        },
+    });
 }
 
 // Edit Priorities: enters/leaves the zone-navigable priority edit mode. Styled

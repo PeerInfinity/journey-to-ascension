@@ -144,6 +144,8 @@ export interface GameMods {
     auto_use_free_items: boolean;
     artifact_tasks_item_cycle_only: boolean;
     queue_cycle: boolean;
+    auto_dreamcatcher: boolean;
+    auto_dreamcatcher_pct: number;
     threshold_master: boolean;
     threshold_end_run: boolean;
     threshold_perk_affordable_enabled: boolean;

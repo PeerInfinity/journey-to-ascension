@@ -32,6 +32,7 @@ save from before a mod existed simply gets that mod off.
 | **Auto Use Cycle** | Cycle item auto-use across Energy Resets: run N resets with Auto Use Items off (banking Items), then one with it on (spending the stockpile), and repeat. The off-count is configurable. |
 | **Use Free Items** | Even on cycles where Auto Use Items is off, use Items you can spend *without reducing how many you keep* on the next reset (the surplus left by keep-rounding). Artifacts are excluded. |
 | **Artifact Tasks: Item Cycles Only** | Only run scheduled artifact tasks while Auto Use Items is enabled (see [artifact-tasks.md](artifact-tasks.md)). |
+| **Auto Dreamcatcher** | Use a held Dreamcatcher before a task rep that would consume at least a set percentage of current energy (default 25%) — i.e. late in the run, when its "duplicate everything found this reset" effect is near its biggest. One per qualifying rep; only while Auto Use Items is enabled. |
 | **Energy Thresholds** | Skip prioritized tasks that aren't worth their energy — per-category energy-per-level thresholds; see below. |
 | **End Run When All Skipped** | (Under Energy Thresholds) When every remaining prioritized task is over its threshold, trigger the Energy Reset instead of idling. |
 
@@ -49,6 +50,15 @@ cheap) reps.
 On an expensive Boss with both tools enabled, **Bottled Lightning is applied
 first**, then Auto Scroll of Haste re-checks and only adds a Scroll if the rep is
 *still* unaffordable.
+
+**Auto Dreamcatcher** uses a different trigger, because a Dreamcatcher doesn't
+speed anything up — it duplicates one copy of every Item type found this energy
+reset, so it's worth the most as late in the run as possible. It fires when the
+next rep would consume at least the configured percentage of *current* energy
+(default 25%): once reps start qualifying, energy only shrinks, so held copies
+drain naturally over the run's final tasks. It's skipped while nothing (except
+Dreamcatchers) has been found yet, and it runs after the Haste/Lightning
+decisions so its cost estimate reflects the boosts that will actually apply.
 
 Auto-use of Artifacts is deliberately **not** applied to synthetic tasks
 (artifact tasks, host exit tasks) — see [balance-and-qol.md](balance-and-qol.md).
@@ -93,8 +103,9 @@ a notification appears and automation idles.
 
 - **State / defaults:** `GameMods` interface and `defaultMods()` in
   `simulation.ts`; merged over defaults on load (`{ ...defaultMods(), ...saved }`).
-- **Auto artifacts:** `maybeAutoUseHaste()` and `maybeAutoUseLightning()`,
-  called from `applyTaskRepStartEffects()`.
+- **Auto artifacts:** `maybeAutoUseHaste()`, `maybeAutoUseLightning()`, and
+  `maybeAutoUseDreamcatcher()`, called from `applyTaskRepStartEffects()`;
+  Dreamcatcher UI in `setupAutoDreamcatcherControl()` (`rendering.ts`).
 - **Cycles:** `applyResetCycle()` → `applyAutoUseCycle()` (and `applyQueueCycle()`).
 - **Free items:** `maybeUseRoundingErrorItem()`.
 - **Energy thresholds:** `isThresholdSkipped()` / `getThresholdCategory()` /
