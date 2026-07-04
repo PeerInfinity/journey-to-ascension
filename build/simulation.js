@@ -1833,14 +1833,18 @@ export function estimateResetsToComplete(task, max_resets) {
         // Reps done this run survive until the reset wipes them, so run 0
         // only needs the remaining reps; later runs start from zero.
         const reps = resets == 0 ? Math.max(1, def.max_reps - task.reps) : def.max_reps;
-        const energy_to_complete = calcTaskTicks(progress_per_tick, cost) * drain * reps;
-        if (energy_to_complete <= budget) {
+        // The final tick may overdraft below zero (energy only has to be > 0
+        // when it starts), so completing T ticks needs just the first T - 1
+        // funded.
+        const total_ticks = calcTaskTicks(progress_per_tick, cost) * reps;
+        if ((total_ticks - 1) * drain < budget) {
             return resets;
         }
         // Grind this run's whole budget into the task; XP is linear in the
         // progress achieved. Level-ups during the run would speed it up
-        // further, so this is a (slightly) conservative estimate.
-        const ticks = Math.floor(budget / drain);
+        // further, so this is a (slightly) conservative estimate. Ceil, not
+        // floor: the last tick of a run overdrafts (see above).
+        const ticks = Math.ceil(budget / drain);
         const progress = Math.min(ticks * progress_per_tick, cost * reps);
         const xp = calcSkillXp(task, progress, true);
         if (xp <= 0) {
@@ -1877,9 +1881,13 @@ export function estimateLevelsFromGrinding(task, budget) {
     const progress_per_tick = calcTaskProgressMultiplier(task);
     const drain = calcEnergyDrainPerTick(task, isSingleTickTaskImpl(progress_per_tick, cost));
     const max_progress = cost * Math.max(1, def.max_reps - task.reps);
-    const progress = drain > 0
-        ? Math.min(Math.floor(budget / drain) * progress_per_tick, max_progress)
-        : max_progress;
+    // Ticks keep coming while energy is > 0 and the final tick may overdraft
+    // below zero (checkEnergyReset fires at <= 0, after the drain), so any
+    // positive budget funds ceil(budget / drain) ticks — never zero. Flooring
+    // here stalled runs at 0.x energy: every candidate's yield reported 0, so
+    // the Best Task fallback found nothing and nothing drained the remnant.
+    const ticks = drain > 0 ? Math.ceil(budget / drain) : Infinity;
+    const progress = Math.min(ticks * progress_per_tick, max_progress);
     const xp = calcSkillXp(task, progress, true);
     let levels = 0;
     for (const skill_type of def.skills) {
@@ -1916,8 +1924,13 @@ function handleThresholdStall(skipped) {
             threshold_stall_notified = false;
             return best;
         }
-        // No candidate can earn anything (e.g. not enough energy for one
-        // tick) — fall through to the idle notification.
+        // No candidate can convert energy into levels. Shouldn't happen now
+        // that the overdraft tick is modeled (any positive budget funds at
+        // least one tick), but if it does: the player chose "never idle", so
+        // end the run rather than stall.
+        GAMESTATE.is_in_energy_reset = true;
+        populateEnergyResetInfo();
+        return null;
     }
     if (!threshold_stall_notified) {
         threshold_stall_notified = true;

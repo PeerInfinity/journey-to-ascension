@@ -145,10 +145,12 @@ would never end. The **When All Skipped** control picks what:
   Resume on Reset.
 - **Best Task** — run the skipped task that would earn the **most total skill
   levels** from the remaining energy (XP accrues per tick, so even reps that
-  can't finish convert energy into levels). The choice is re-evaluated at
-  every pick as energy drains, and if some task drops back under its
-  threshold the normal priority walk takes over again — so the run ends by
-  converting leftover energy into levels instead of idling.
+  can't finish convert energy into levels; the final tick may overdraft below
+  zero, matching normal play, so even a sliver of energy buys one more tick).
+  The choice is re-evaluated at every pick as energy drains, and if some task
+  drops back under its threshold the normal priority walk takes over again —
+  so the run ends by converting leftover energy into levels instead of
+  idling. If nothing at all could convert, the run ends like End Run.
 
 ## Code map
 
