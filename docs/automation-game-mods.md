@@ -107,7 +107,7 @@ fails its category's judgment, where each category picks the judgment via its
 - **/rep** — the rep's total energy cost vs that percentage: "don't do this
   if one rep costs more than T% of my max energy." Right for tasks whose
   value isn't XP.
-- **/rst** (the default for every category) — the estimated number of
+- **/rst** (the default for most categories) — the estimated number of
   **energy resets** until the task could be *fully completed* (all remaining
   reps in one go), vs a reset count: "skip it if it isn't reachable within N
   resets." 0 means it must be completable right now. The estimate assumes conditions like the moment of the decision
