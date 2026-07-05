@@ -1861,12 +1861,17 @@ export function isThresholdSkipped(task) {
     }
     return cost / expected_levels > budget;
 }
-// Scrolls of Haste available to the threshold estimates (held plus already
-// queued). The player ruled that every threshold metric should account for
-// them: a task you'd realistically start by spending a Scroll shouldn't be
-// judged on its unhasted cost. One Scroll covers one rep.
+// Scrolls of Haste available to the threshold estimates. The player ruled
+// that every threshold metric should account for them: a task you'd
+// realistically start by spending a Scroll shouldn't be judged on its
+// unhasted cost. One Scroll covers one rep. Held Scrolls only count while
+// item auto-use is enabled (user ruling) — on banking cycles automation
+// won't spend them (maybeAutoUseHaste has the same gate), so assuming haste
+// there would promise assistance that never arrives. An already-queued
+// Scroll counts regardless: it's committed and applies to the next rep.
 function thresholdScrollsAvailable() {
-    return (GAMESTATE.items.get(ItemType.ScrollOfHaste) ?? 0) + GAMESTATE.queued_scrolls_of_haste;
+    const held = GAMESTATE.auto_use_items ? (GAMESTATE.items.get(ItemType.ScrollOfHaste) ?? 0) : 0;
+    return held + GAMESTATE.queued_scrolls_of_haste;
 }
 // Estimate how many energy resets it would take until this task could be
 // fully completed (all remaining reps in one go), assuming conditions like

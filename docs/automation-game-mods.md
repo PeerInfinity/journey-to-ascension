@@ -149,9 +149,12 @@ Boss into a Combat task (first kill of a prestige judges as "Unlocks a Task",
 every later kill as "Combat"). Synthetic tasks and skill-less tasks are
 always exempt.
 
-All three metrics judge a task the way you'd actually attempt it: while you
-hold (or have queued) a **Scroll of Haste**, costs are computed as if a
-Scroll will be spent — one hasted rep per available Scroll. The /rst
+All three metrics judge a task the way you'd actually attempt it: while
+**Auto Use Items is enabled** and you hold a **Scroll of Haste** (or one is
+already queued — queued Scrolls count on any cycle, they're committed),
+costs are computed as if a Scroll will be spent — one hasted rep per
+available Scroll. On banking cycles held Scrolls are ignored, matching Auto
+Scroll of Haste's own gating: automation wouldn't spend them there. The /rst
 completability check splits reps into hasted and plain accordingly, and the
 multi-reset grind projection assumes the same Scrolls are available every
 simulated reset (a Scroll you have now, you'll presumably have next run), so
