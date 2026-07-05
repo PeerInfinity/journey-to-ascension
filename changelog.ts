@@ -9,6 +9,7 @@ export const CHANGELOG: ChangelogEntry[] = [
         version: "Fork 1.5",
         date: "2026-07-05",
         changes: "- Added Unlock Savings (Divinity popup, next to Auto-Buy Cheapest): while enabled, Auto-Buy Cheapest buys unlockables the moment they're affordable (cheapest first) and budgets repeatable purchases — repeatable spending since the last unlockable purchase stays within a set percentage (default 100%) of the cheapest not-yet-owned unlockable's cost, so cheap repeatables can't soak up Divine Spark forever just below a big unlockable's price. Once every unlockable in your unlocked layers is owned, spending is unrestricted. Manual and queued purchases count toward the same budget window, and the explicit purchase queue still outranks all auto-buying<br>"
+        + "- Tuned automation defaults per simulation sweeps (every toggle still starts off; these are the values a feature starts with when you enable it): Item threshold /rep 10% → 5%, the /rst 3 categories (new-Perk both kinds, progression, Task-unlockers) → /rst 5, and the Auto-Prestige zone-stall trigger 20 → 40 resets. In 1000-run simulations the tighter Item threshold plus later prestiging finished every task of the first 15 Zones in ~15% fewer runs and roughly doubled long-run Divine Spark income — Spark gain grows exponentially with your deepest Zone, so fewer-but-deeper prestiges compound; prestiging on a short stall was the single worst setting tested<br>"
     },
     {
         version: "Fork 1.4",
