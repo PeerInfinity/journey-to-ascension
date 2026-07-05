@@ -143,6 +143,14 @@ export declare const BASE_PRESTIGE_GAIN = 100;
 export declare function getPrestigeGainExponent(): number;
 export declare function calcDivineSparkGainFromHighestZone(zone: number): number;
 export declare function calcDivineSparkGain(): number;
+export interface PrestigeBuyEntry {
+    kind: "unlock" | "repeatable";
+    type: number;
+}
+export declare function queuePrestigePurchase(kind: "unlock" | "repeatable", type: number): void;
+export declare function resetPrestigeBuyQueue(): void;
+export declare function getPrestigeQueuePositions(kind: "unlock" | "repeatable", type: number): number[];
+export declare function processPrestigeBuyQueue(): void;
 export declare function shouldAutoPrestige(): boolean;
 export declare function maybeAutoPrestige(): boolean;
 export declare function calcSparkPerReset(): number;
@@ -240,6 +248,7 @@ export declare class Gamestate {
     ring_plan_used: string[];
     auto_fill_order: string[];
     auto_fill_order_collapsed: boolean;
+    prestige_buy_queue: PrestigeBuyEntry[];
     peak_spark_per_reset: number;
     resets_since_highest_zone_gain: number;
     current_zone: number;

@@ -2369,6 +2369,71 @@ export function calcDivineSparkGainFromHighestZone(zone) {
 export function calcDivineSparkGain() {
     return calcDivineSparkGainFromHighestZone(GAMESTATE.highest_zone);
 }
+// Queue mode in the Divinity popup pushes here instead of buying. The queue
+// deliberately SURVIVES prestige — buying upgrades right after a prestige is
+// its main use. A non-empty queue is the feature's opt-in; there's no mod.
+export function queuePrestigePurchase(kind, type) {
+    // Queueing the same one-time unlock twice would just leave a dead entry.
+    if (kind == "unlock" && GAMESTATE.prestige_buy_queue.some((e) => e.kind == "unlock" && e.type == type)) {
+        return;
+    }
+    GAMESTATE.prestige_buy_queue.push({ kind, type });
+    processPrestigeBuyQueue(); // already affordable -> buys immediately
+    saveGame();
+}
+export function resetPrestigeBuyQueue() {
+    GAMESTATE.prestige_buy_queue = [];
+    saveGame();
+}
+// 1-based queue positions of the pending entries for one purchase — the
+// button badges in the Divinity popup.
+export function getPrestigeQueuePositions(kind, type) {
+    const positions = [];
+    GAMESTATE.prestige_buy_queue.forEach((entry, index) => {
+        if (entry.kind == kind && entry.type == type) {
+            positions.push(index + 1);
+        }
+    });
+    return positions;
+}
+// Strict head-of-queue (user ruling): nothing is bought until the FRONT
+// entry is affordable, so the order is a real strategic tool — you can
+// deliberately save toward something big while cheaper entries wait behind
+// it. Entries that became moot (unlock already owned, unknown type) drop
+// silently. Runs once per tick while the queue is non-empty, which covers
+// every spark source (prestige, discovery spark, spark items).
+export function processPrestigeBuyQueue() {
+    let bought = false;
+    while (GAMESTATE.prestige_buy_queue.length > 0) {
+        const head = GAMESTATE.prestige_buy_queue[0];
+        if (head.kind == "unlock") {
+            if (hasPrestigeUnlock(head.type)) {
+                GAMESTATE.prestige_buy_queue.shift();
+                continue;
+            }
+            const def = PRESTIGE_UNLOCKABLES.find((unlock) => unlock.type == head.type);
+            if (!def) {
+                GAMESTATE.prestige_buy_queue.shift();
+                continue;
+            }
+            if (def.cost > GAMESTATE.divine_spark) {
+                break;
+            }
+            addPrestigeUnlock(head.type);
+        }
+        else {
+            if (calcPrestigeRepeatableCost(head.type) > GAMESTATE.divine_spark) {
+                break;
+            }
+            increasePrestigeRepeatableLevel(head.type);
+        }
+        GAMESTATE.prestige_buy_queue.shift();
+        bought = true;
+    }
+    if (bought) {
+        saveGame();
+    }
+}
 // MARK: Auto-Prestige (Game Mod)
 // True when any enabled auto-prestige condition is met. Evaluated at the
 // run-end decision point (the energy-reset moment), where prestige replaces
@@ -2911,6 +2976,9 @@ export class Gamestate {
     // sanitized on read by getAutoFillOrder(). Stored as plain strings.
     auto_fill_order = defaultAutoFillOrder();
     auto_fill_order_collapsed = true;
+    // Prestige purchase queue (Game Mod): pending Divinity purchases, bought
+    // strictly head-first whenever spark suffices. Survives prestige.
+    prestige_buy_queue = [];
     // Spark stats (Game Mod): highest calcSparkPerReset() seen since the
     // last prestige. Feeds the display and the ratio auto-prestige trigger.
     peak_spark_per_reset = 0;
@@ -3062,6 +3130,9 @@ export function updateGamestate() {
     if (spark_rate > GAMESTATE.peak_spark_per_reset) {
         GAMESTATE.peak_spark_per_reset = spark_rate;
     }
+    if (GAMESTATE.prestige_buy_queue.length > 0) {
+        processPrestigeBuyQueue();
+    }
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 window.setProgressMult = (new_mult) => task_progress_mult = new_mult;
@@ -3182,6 +3253,10 @@ window.getArtifactTasks = () => getArtifactTasks();
 window.getQueueConfigs = () => ({ active: getActiveQueueIndex(), configs: getQueueConfigs() });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 window.autoFillPriorities = () => { autoFillAllPriorities(); RENDERING.createTasks(); return { success: true }; };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.getPrestigeBuyQueue = () => GAMESTATE.prestige_buy_queue;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.resetPrestigeBuyQueue = () => { resetPrestigeBuyQueue(); return { success: true }; };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 window.getAutoFillOrder = () => getAutoFillOrder();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

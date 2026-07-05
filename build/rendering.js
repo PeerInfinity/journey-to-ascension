@@ -1,5 +1,5 @@
 import { Task, TaskDefinition, ZONES, TaskType, PERKS_BY_ZONE, ITEMS_BY_ZONE } from "./zones.js";
-import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, getBossEnergyDisparityLimit, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId, getQueueConfigs, getActiveQueueIndex, getQueueRunsOnCurrent, advanceQueueCycle, addQueue, removeQueue, setQueueAutoUseMode, getQueueExcludedItems, addQueueExcludedItem, removeQueueExcludedItem, setQueueRepeatCount, setQueueName, moveQueue, setActiveQueue, isEditMode, enterEditMode, exitEditMode, setEditZone, getEditMaxZone, autoFillAllPriorities, getAutoFillOrder, moveAutoFillCategory, resetAutoFillOrder, calcSparkPerReset, maybeAutoPrestige, THRESHOLD_METRIC_REP, THRESHOLD_METRIC_RESETS, THRESHOLD_ALL_SKIPPED_IDLE } from "./simulation.js";
+import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, getBossEnergyDisparityLimit, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId, getQueueConfigs, getActiveQueueIndex, getQueueRunsOnCurrent, advanceQueueCycle, addQueue, removeQueue, setQueueAutoUseMode, getQueueExcludedItems, addQueueExcludedItem, removeQueueExcludedItem, setQueueRepeatCount, setQueueName, moveQueue, setActiveQueue, isEditMode, enterEditMode, exitEditMode, setEditZone, getEditMaxZone, autoFillAllPriorities, getAutoFillOrder, moveAutoFillCategory, resetAutoFillOrder, calcSparkPerReset, maybeAutoPrestige, queuePrestigePurchase, resetPrestigeBuyQueue, getPrestigeQueuePositions, THRESHOLD_METRIC_REP, THRESHOLD_METRIC_RESETS, THRESHOLD_ALL_SKIPPED_IDLE } from "./simulation.js";
 import { GAMESTATE, RENDERING, resetSave } from "./game.js";
 import { ItemType, ItemDefinition, ITEMS, HASTE_MULT, ARTIFACTS, MAGIC_RING_MULT, BOTTLED_LIGHTNING_MULT } from "./items.js";
 import { PerkDefinition, PerkType, PERKS, getPerkNameWithEmoji } from "./perks.js";
@@ -1249,6 +1249,9 @@ function updateGameOver() {
     }
 }
 // MARK: Prestige
+// Queue-mode state for the Divinity popup: while on, purchase clicks queue
+// instead of buying. Transient UI state — deliberately not saved.
+let prestige_queue_mode = false;
 function triggerPrestigeConfirmation() {
     let warning = `Will give ${formatInt(calcDivineSparkGain())} ${DIVINE_SPARK_TEXT}, but reset everything except that which is granted by Divinity purchases`;
     if (!hasPrestigeUnlock(PrestigeUnlockType.SeeBeyondTheVeil)) {
@@ -1327,6 +1330,30 @@ function populatePrestigeView() {
         const prestiges_done_text = createChildElement(summary_div, "p");
         prestiges_done_text.textContent = `Prestiges done: ${GAMESTATE.prestige_count}`;
     }
+    // Prestige purchase queue: a mode toggle (clicks queue instead of buy)
+    // and a reset button. The queue itself shows as badges on the purchase
+    // buttons rather than as a list.
+    if (GAMESTATE.prestige_layers_unlocked.length > 0) {
+        const queue_controls = createChildElement(scroll_area, "div");
+        queue_controls.className = "prestige-queue-controls";
+        const mode_button = createChildElement(queue_controls, "button");
+        mode_button.className = prestige_queue_mode ? "on" : "off";
+        mode_button.textContent = `Queue Purchases: ${prestige_queue_mode ? "On" : "Off"}`;
+        mode_button.addEventListener("click", () => {
+            prestige_queue_mode = !prestige_queue_mode;
+            populatePrestigeView();
+        });
+        setupTooltip(mode_button, () => `Queue Purchases: ${prestige_queue_mode ? "On" : "Off"}`, () => "While on, clicking a purchase queues it instead of buying it (unaffordable purchases can be queued too; clicking a repeatable several times queues several levels). Queued purchases are bought automatically, strictly in queue order, whenever you have enough Divine Spark — including Spark earned mid-run and right after a Prestige; the queue survives Prestige. Buttons show their queue position.");
+        const reset_button = createChildElement(queue_controls, "button");
+        reset_button.className = "off";
+        reset_button.textContent = `Reset Queue (${GAMESTATE.prestige_buy_queue.length})`;
+        reset_button.disabled = GAMESTATE.prestige_buy_queue.length == 0;
+        reset_button.addEventListener("click", () => {
+            resetPrestigeBuyQueue();
+            populatePrestigeView();
+        });
+        setupTooltipStatic(reset_button, "Reset Queue", "Clears all queued purchases. There's no individual removal — re-queue what you still want.");
+    }
     const PRESTIGE_LAYER_NAMES = ["Touch the Divine", "Transcend Humanity", "Embrace Divinity", "Ascend to Godhood"];
     for (const prestige_layer of GAMESTATE.prestige_layers_unlocked) {
         const touch_the_divine_div = createChildElement(scroll_area, "div");
@@ -1348,14 +1375,25 @@ function populatePrestigeView() {
             unlock_button.innerHTML = `${unlock.name}`;
             if (!is_unlocked) {
                 unlock_button.innerHTML += `<br>Cost: ${formatInt(unlock.cost)}`;
+                const positions = getPrestigeQueuePositions("unlock", unlock.type);
+                if (positions.length > 0) {
+                    unlock_button.innerHTML += `<br><span class="queue-badge">Queued #${positions[0]}</span>`;
+                }
             }
             if (!is_unlocked) {
-                unlock_button.disabled = unlock.cost > GAMESTATE.divine_spark;
+                // In queue mode unaffordable purchases stay clickable — being
+                // able to queue what you can't yet afford is the point.
+                unlock_button.disabled = !prestige_queue_mode && unlock.cost > GAMESTATE.divine_spark;
             }
             setupTooltipStatic(unlock_button, unlock.name, unlock.get_description());
             if (!is_unlocked) {
                 unlock_button.addEventListener("click", () => {
-                    addPrestigeUnlock(unlock.type);
+                    if (prestige_queue_mode) {
+                        queuePrestigePurchase("unlock", unlock.type);
+                    }
+                    else {
+                        addPrestigeUnlock(unlock.type);
+                    }
                     populatePrestigeView();
                 });
             }
@@ -1373,7 +1411,11 @@ function populatePrestigeView() {
                 const cost = calcPrestigeRepeatableCost(upgrade.type);
                 const level = getPrestigeRepeatableLevel(upgrade.type);
                 unlock_button.innerHTML = `${upgrade.name}<br>Cost: ${formatInt(cost)}<br>Level: ${level}`;
-                unlock_button.disabled = cost > GAMESTATE.divine_spark;
+                const positions = getPrestigeQueuePositions("repeatable", upgrade.type);
+                if (positions.length > 0) {
+                    unlock_button.innerHTML += `<br><span class="queue-badge">Queued #${positions[0]}${positions.length > 1 ? ` ×${positions.length}` : ""}</span>`;
+                }
+                unlock_button.disabled = !prestige_queue_mode && cost > GAMESTATE.divine_spark;
                 setupTooltipStaticHeader(unlock_button, upgrade.name, () => {
                     let desc = upgrade.get_description();
                     desc += "<br><br>Current Effect: ";
@@ -1422,7 +1464,12 @@ function populatePrestigeView() {
                     return desc;
                 });
                 unlock_button.addEventListener("click", () => {
-                    increasePrestigeRepeatableLevel(upgrade.type);
+                    if (prestige_queue_mode) {
+                        queuePrestigePurchase("repeatable", upgrade.type);
+                    }
+                    else {
+                        increasePrestigeRepeatableLevel(upgrade.type);
+                    }
                     populatePrestigeView();
                 });
             }

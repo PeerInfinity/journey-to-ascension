@@ -182,6 +182,23 @@ would never end. The **When All Skipped** control picks what:
   so the run ends by converting leftover energy into levels instead of
   idling. If nothing at all could convert, the run ends like End Run.
 
+## Prestige purchase queue
+
+The Divinity popup has a **Queue Purchases** mode: while it's on, clicking a
+purchase queues it instead of buying it — including purchases you can't
+afford yet, which is the point; clicking a repeatable several times queues
+several levels. Queued purchases are bought automatically and **strictly in
+queue order** (nothing is bought until the front entry is affordable, so the
+order is a strategic tool — you can save toward something big while cheaper
+entries wait behind it). The engine runs every tick the queue is non-empty,
+so it catches every spark source: prestige itself, discovery spark mid-run,
+and spark items. The queue **survives prestige** — buying upgrades right
+after a prestige is its main use — and persists in the save. Buttons show
+`Queued #position` (and `×count` for stacked repeatable entries); there's no
+individual removal, just **Reset Queue**. Entries that become moot (an
+unlock bought manually) drop silently. If the popup is open while the engine
+buys, the buttons refresh on your next interaction with it.
+
 ## Code map
 
 - **State / defaults:** `GameMods` interface and `defaultMods()` in
@@ -199,6 +216,11 @@ would never end. The **When All Skipped** control picks what:
   `getAutoFillOrder()` / `moveAutoFillCategory()` / `resetAutoFillOrder()`,
   also on `window`) in `simulation.ts`; UI in `setupAutoFillControl()` +
   `setupAutoFillOrderControl()` (`rendering.ts`).
+- **Prestige purchase queue:** `PrestigeBuyEntry` / `prestige_buy_queue`,
+  `queuePrestigePurchase()` / `resetPrestigeBuyQueue()` /
+  `getPrestigeQueuePositions()` / `processPrestigeBuyQueue()` (per-tick in
+  `updateGamestate()`); UI in `populatePrestigeView()`
+  (`prestige_queue_mode`, `.queue-badge`).
 - **Auto-Prestige / spark stats:** `calcSparkPerReset()` (+ per-tick peak in
   `updateGamestate()`), `shouldAutoPrestige()` / `maybeAutoPrestige()`
   (called by rendering's run-end paths instead of `doEnergyReset()`),
