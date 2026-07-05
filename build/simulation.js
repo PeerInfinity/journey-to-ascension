@@ -361,8 +361,10 @@ function updateActiveTask() {
     }
     // Can't undo after the item's started having an effect
     disableItemUndo();
-    // Instant mode: complete the entire task in one tick.
-    if (instant_mode) {
+    // Instant mode: complete the entire task in one tick. Active via the
+    // programmatic hook (window.setInstantMode, used by the substrate and
+    // tests) OR the player-facing mod pair (toggle gated behind Settings).
+    if (instant_mode || (GAMESTATE.mods.instant_mode_allowed && GAMESTATE.mods.instant_mode)) {
         completeTaskInstantly(active_task);
         GAMESTATE.active_task = null;
         saveGame();
@@ -2861,6 +2863,8 @@ export function defaultMods() {
         auto_continue_energy_reset: false,
         suppress_prestige_popup: false,
         show_spark_stats: false,
+        instant_mode_allowed: false,
+        instant_mode: false,
         resume_automation_on_reset: false,
         auto_haste: false,
         auto_lightning: false,
@@ -2966,6 +2970,11 @@ export function setMod(name, value) {
     else if (name == "auto_prioritize" && GAMESTATE.mods.auto_prioritize) {
         GAMESTATE.mods.queue_cycle = false;
         maybeAutoPrioritizeAll(); // take effect immediately, not at the next reset
+    }
+    else if (name == "instant_mode_allowed" && !GAMESTATE.mods.instant_mode_allowed) {
+        // Revoking the Settings gate hides AND disables the toggle: instant
+        // mode must not silently resume if the gate is later re-enabled.
+        GAMESTATE.mods.instant_mode = false;
     }
     applyMods();
     saveGame();

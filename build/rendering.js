@@ -1581,6 +1581,12 @@ const SETTINGS_MOD_TOGGLES = [
         mod: "suppress_prestige_popup",
     },
     {
+        id: "mod-instant-mode-allowed",
+        label: "Allow Instant Mode",
+        tooltip: "Adds an Instant Mode toggle to the Advanced Automation panel: tasks complete their remaining reps in a single tick, billing the same Energy and XP normal play would. Turning this off hides that toggle AND switches Instant Mode off.",
+        mod: "instant_mode_allowed",
+    },
+    {
         id: "mod-show-spark-stats",
         label: "Show Spark per Reset",
         tooltip: "Shows, under the Divine Spark button, the Divine Spark a prestige would award averaged over this prestige's runs (Energy Resets so far plus the current run), the peak that average has reached since the last prestige, and how many resets in a row have passed without reaching a new highest Zone. The peak only starts counting once Prestige is actually available — so it reads as the gain divided by the resets it took to first reach it, not the on-paper base gain of run one. When the average sags well below its peak, this prestige has stopped paying. These are the raw signals behind the Auto-Prestige triggers.",
@@ -2192,6 +2198,26 @@ function setupAdvancedAutomationControls(parent) {
     setupQueueCycleControl(content);
     setupThresholdControls(content);
     setupAutoPrestigeControls(content);
+    setupInstantModeControl(content);
+}
+// Instant Mode (Game Mod): only rendered while the Settings gate (Allow
+// Instant Mode) is on — revoking the gate both hides this and switches the
+// mode off (setMod side effect).
+function setupInstantModeControl(content) {
+    if (!GAMESTATE.mods.instant_mode_allowed) {
+        return;
+    }
+    const button = createChildElement(content, "button");
+    function refresh() {
+        button.className = GAMESTATE.mods.instant_mode ? "on" : "off";
+        button.textContent = `Instant Mode: ${GAMESTATE.mods.instant_mode ? "On" : "Off"}`;
+    }
+    refresh();
+    button.addEventListener("click", () => {
+        setMod("instant_mode", !GAMESTATE.mods.instant_mode);
+        refresh();
+    });
+    setupTooltip(button, () => `Instant Mode: ${GAMESTATE.mods.instant_mode ? "On" : "Off"}`, () => "Tasks complete all their remaining reps in a single tick, billing the same Energy and XP normal tick-by-tick play would. Applies to automated and manually-started tasks alike.");
 }
 // Auto-Prestige (Game Mod): at the run-end moment, prestige instead of doing
 // the energy reset when ANY enabled condition is met. Master toggle plus one

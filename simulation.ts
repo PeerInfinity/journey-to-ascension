@@ -450,8 +450,10 @@ function updateActiveTask() {
     // Can't undo after the item's started having an effect
     disableItemUndo();
 
-    // Instant mode: complete the entire task in one tick.
-    if (instant_mode) {
+    // Instant mode: complete the entire task in one tick. Active via the
+    // programmatic hook (window.setInstantMode, used by the substrate and
+    // tests) OR the player-facing mod pair (toggle gated behind Settings).
+    if (instant_mode || (GAMESTATE.mods.instant_mode_allowed && GAMESTATE.mods.instant_mode)) {
         completeTaskInstantly(active_task);
         GAMESTATE.active_task = null;
         saveGame();
@@ -3405,6 +3407,8 @@ export interface GameMods {
     auto_continue_energy_reset: boolean; // skip the energy-reset summary overlay
     suppress_prestige_popup: boolean;    // suppress the "prestige available" popup
     show_spark_stats: boolean;           // show spark-per-reset (current + peak) under the Divine Spark button
+    instant_mode_allowed: boolean;       // Settings gate: expose the Instant Mode toggle in Advanced Automation
+    instant_mode: boolean;               // complete tasks in one tick (only effective while allowed)
 
     // Advanced Automation panel — Controls section (right column)
     resume_automation_on_reset: boolean; // restore automation mode/target after a reset
@@ -3484,6 +3488,8 @@ export function defaultMods(): GameMods {
         auto_continue_energy_reset: false,
         suppress_prestige_popup: false,
         show_spark_stats: false,
+        instant_mode_allowed: false,
+        instant_mode: false,
         resume_automation_on_reset: false,
         auto_haste: false,
         auto_lightning: false,
@@ -3591,6 +3597,10 @@ export function setMod(name: keyof GameMods, value: boolean | number): boolean {
     } else if (name == "auto_prioritize" && GAMESTATE.mods.auto_prioritize) {
         GAMESTATE.mods.queue_cycle = false;
         maybeAutoPrioritizeAll(); // take effect immediately, not at the next reset
+    } else if (name == "instant_mode_allowed" && !GAMESTATE.mods.instant_mode_allowed) {
+        // Revoking the Settings gate hides AND disables the toggle: instant
+        // mode must not silently resume if the gate is later re-enabled.
+        GAMESTATE.mods.instant_mode = false;
     }
 
     applyMods();

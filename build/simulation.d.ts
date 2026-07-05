@@ -170,6 +170,8 @@ export interface GameMods {
     auto_continue_energy_reset: boolean;
     suppress_prestige_popup: boolean;
     show_spark_stats: boolean;
+    instant_mode_allowed: boolean;
+    instant_mode: boolean;
     resume_automation_on_reset: boolean;
     auto_haste: boolean;
     auto_lightning: boolean;
