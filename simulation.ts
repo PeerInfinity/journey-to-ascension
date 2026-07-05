@@ -2243,7 +2243,10 @@ export function isThresholdSkipped(task: Task): boolean {
 
     const threshold_pct = GAMESTATE.mods[keys.pct] as number;
     const budget = (threshold_pct / 100) * GAMESTATE.max_energy;
-    const cost = calcTaskEnergyCost(task, false, false);
+    // Judge the task the way the player would actually attempt it: with a
+    // Scroll of Haste if one is held (user ruling — Touch the Divine was
+    // skipped even though a manual start plus a Scroll succeeds).
+    const cost = calcTaskEnergyCost(task, thresholdScrollsAvailable() > 0, false);
 
     // Rep mode: judge the rep's total energy cost. The default for
     // progression (Travel/Mandatory/Prestige), whose value is progression,
@@ -2260,6 +2263,14 @@ export function isThresholdSkipped(task: Task): boolean {
     }
 
     return cost / expected_levels > budget;
+}
+
+// Scrolls of Haste available to the threshold estimates (held plus already
+// queued). The player ruled that every threshold metric should account for
+// them: a task you'd realistically start by spending a Scroll shouldn't be
+// judged on its unhasted cost. One Scroll covers one rep.
+function thresholdScrollsAvailable(): number {
+    return (GAMESTATE.items.get(ItemType.ScrollOfHaste) ?? 0) + GAMESTATE.queued_scrolls_of_haste;
 }
 
 // Estimate how many energy resets it would take until this task could be
@@ -2280,6 +2291,10 @@ export function estimateResetsToComplete(task: Task, max_resets: number): number
 
     const cost = calcTaskCost(task);
     const budget = GAMESTATE.current_energy;
+    // Currently-held Scrolls count toward completability, one hasted rep per
+    // Scroll (user ruling; same optimism as isPerkTaskAffordableThisCycle).
+    // Held constant across simulated runs like the other conditions.
+    const scrolls = thresholdScrollsAvailable();
 
     // Split the live progress multiplier into its level part (uniform
     // 1.01^level, geometric-meaned across skills = 1.01^(mean level)) and
@@ -2296,11 +2311,18 @@ export function estimateResetsToComplete(task: Task, max_resets: number): number
         // Reps done this run survive until the reset wipes them, so run 0
         // only needs the remaining reps; later runs start from zero.
         const reps = resets == 0 ? Math.max(1, def.max_reps - task.reps) : def.max_reps;
+
+        // Completability: up to `scrolls` reps costed hasted, the rest plain.
         // The final tick may overdraft below zero (energy only has to be > 0
-        // when it starts), so completing T ticks needs just the first T - 1
-        // funded.
-        const total_ticks = calcTaskTicks(progress_per_tick, cost) * reps;
-        if ((total_ticks - 1) * drain < budget) {
+        // when it starts), so one final-tick drain is deducted.
+        const hasted_reps = Math.min(reps, scrolls);
+        const plain_reps = reps - hasted_reps;
+        const hasted_progress = progress_per_tick * HASTE_MULT;
+        const hasted_drain = calcEnergyDrainPerTick(task, isSingleTickTaskImpl(hasted_progress, cost));
+        const total_energy = hasted_reps * calcTaskTicks(hasted_progress, cost) * hasted_drain
+            + plain_reps * calcTaskTicks(progress_per_tick, cost) * drain;
+        const final_drain = plain_reps > 0 ? drain : hasted_drain;
+        if (total_energy - final_drain < budget) {
             return resets;
         }
 

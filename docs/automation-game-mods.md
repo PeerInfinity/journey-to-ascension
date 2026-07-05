@@ -149,6 +149,14 @@ Boss into a Combat task (first kill of a prestige judges as "Unlocks a Task",
 every later kill as "Combat"). Synthetic tasks and skill-less tasks are
 always exempt.
 
+All three metrics judge a task the way you'd actually attempt it: while you
+hold (or have queued) a **Scroll of Haste**, costs are computed as if a
+Scroll will be spent — one hasted rep per available Scroll (the /rst
+completability check splits reps into hasted and plain accordingly; the
+grind projection stays unhasted, conservatively). Without this, a task like
+Touch the Divine gets skipped on its unhasted cost even though starting it
+with a Scroll succeeds.
+
 Threshold skipping always *skips* (it never pauses automation, regardless of
 the Skip/Pause on Blocked Tasks setting). If **everything** left is skipped,
 something must happen — no running task means no energy drain, so the run

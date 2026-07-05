@@ -2684,7 +2684,7 @@ function setupThresholdControls(content: Element) {
         setupControls(); // rebuild: shows/hides the per-category rows
     });
     setupTooltip(master, () => `Energy Thresholds: ${GAMESTATE.mods.threshold_master ? "On" : "Off"}`, () =>
-        "Skip prioritized Tasks that fail their category's judgment. Each category picks its metric: /lvl (Energy per skill level earned vs a % of max Energy — \"worth it as XP?\"), /rep (the rep's total Energy vs that % — \"can I afford it?\"), or /rst (estimated Energy Resets until fully completable vs a count — \"reachable soon?\", the default). Each category can be toggled off to exempt it — its Tasks then always run.");
+        "Skip prioritized Tasks that fail their category's judgment. Each category picks its metric: /lvl (Energy per skill level earned vs a % of max Energy — \"worth it as XP?\"), /rep (the rep's total Energy vs that % — \"can I afford it?\"), or /rst (estimated Energy Resets until fully completable vs a count — \"reachable soon?\", the default). While you hold a Scroll of Haste, every metric judges the Task as if a Scroll will be spent on it (one hasted rep per held Scroll). Each category can be toggled off to exempt it — its Tasks then always run.");
 
     if (!on) {
         return;
