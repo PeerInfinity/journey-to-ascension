@@ -2918,6 +2918,51 @@ export function processPrestigeBuyQueue() {
     }
 }
 
+// Game Mod — with the purchase queue EMPTY, automatically buy the cheapest
+// affordable Divinity purchase (unlockables not yet owned, and repeatables,
+// within unlocked prestige layers), repeating until nothing is affordable.
+// A non-empty queue always takes precedence: explicit plans outrank the
+// greedy default.
+function maybeAutoBuyCheapest() {
+    if (!GAMESTATE.mods.auto_buy_cheapest || GAMESTATE.prestige_buy_queue.length > 0) {
+        return;
+    }
+    let bought = false;
+    for (;;) {
+        let best_cost = Infinity;
+        let buy: (() => void) | null = null;
+        for (const unlock of PRESTIGE_UNLOCKABLES) {
+            if (!GAMESTATE.prestige_layers_unlocked.includes(unlock.layer) || hasPrestigeUnlock(unlock.type)) {
+                continue;
+            }
+            if (unlock.cost < best_cost) {
+                best_cost = unlock.cost;
+                const type = unlock.type;
+                buy = () => addPrestigeUnlock(type);
+            }
+        }
+        for (const upgrade of PRESTIGE_REPEATABLES) {
+            if (!GAMESTATE.prestige_layers_unlocked.includes(upgrade.layer)) {
+                continue;
+            }
+            const cost = calcPrestigeRepeatableCost(upgrade.type);
+            if (cost < best_cost) {
+                best_cost = cost;
+                const type = upgrade.type;
+                buy = () => increasePrestigeRepeatableLevel(type);
+            }
+        }
+        if (!buy || best_cost > GAMESTATE.divine_spark) {
+            break;
+        }
+        buy();
+        bought = true;
+    }
+    if (bought) {
+        saveGame();
+    }
+}
+
 // MARK: Auto-Prestige (Game Mod)
 
 // True when any enabled auto-prestige condition is met. Evaluated at the
@@ -3386,6 +3431,7 @@ export interface GameMods {
     auto_prestige_stall_resets: number;
     auto_prestige_wealth_enabled: boolean;   // prospective spark >= pct of owned spark
     auto_prestige_wealth_pct: number;
+    auto_buy_cheapest: boolean;              // queue empty: buy the cheapest affordable Divinity purchase
 
     // Energy Thresholds — skip prioritized tasks that fail the category's
     // configured judgment. Each category has an enable toggle (disabled =
@@ -3459,6 +3505,7 @@ export function defaultMods(): GameMods {
         auto_prestige_stall_resets: 3,
         auto_prestige_wealth_enabled: false,
         auto_prestige_wealth_pct: 10,
+        auto_buy_cheapest: false,
         threshold_master: false,
         threshold_all_skipped: THRESHOLD_ALL_SKIPPED_IDLE,
         threshold_perk_affordable_enabled: false,
@@ -3793,6 +3840,7 @@ export function updateGamestate() {
     if (GAMESTATE.prestige_buy_queue.length > 0) {
         processPrestigeBuyQueue();
     }
+    maybeAutoBuyCheapest();
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -1656,6 +1656,16 @@ function populatePrestigeView() {
             populatePrestigeView();
         });
         setupTooltipStatic(reset_button, "Reset Queue", "Clears all queued purchases. There's no individual removal — re-queue what you still want.");
+
+        const cheapest_button = createChildElement(queue_controls, "button") as HTMLButtonElement;
+        cheapest_button.className = GAMESTATE.mods.auto_buy_cheapest ? "on" : "off";
+        cheapest_button.textContent = `Auto-Buy Cheapest: ${GAMESTATE.mods.auto_buy_cheapest ? "On" : "Off"}`;
+        cheapest_button.addEventListener("click", () => {
+            setMod("auto_buy_cheapest", !GAMESTATE.mods.auto_buy_cheapest);
+            populatePrestigeView();
+        });
+        setupTooltip(cheapest_button, () => `Auto-Buy Cheapest: ${GAMESTATE.mods.auto_buy_cheapest ? "On" : "Off"}`, () =>
+            "While the purchase queue is EMPTY, automatically buy the cheapest affordable Divinity purchase (in your unlocked layers), repeating while anything is affordable. A non-empty queue always takes precedence — explicit plans outrank the greedy default.");
     }
 
     const PRESTIGE_LAYER_NAMES = ["Touch the Divine", "Transcend Humanity", "Embrace Divinity", "Ascend to Godhood"];
@@ -1725,9 +1735,14 @@ function populatePrestigeView() {
                 const cost = calcPrestigeRepeatableCost(upgrade.type);
                 const level = getPrestigeRepeatableLevel(upgrade.type);
                 unlock_button.innerHTML = `${upgrade.name}<br>Cost: ${formatInt(cost)}<br>Level: ${level}`;
+                // Entries of one upgrade need not be consecutive (queue order
+                // is exactly click order), so show each pending position.
                 const positions = getPrestigeQueuePositions("repeatable", upgrade.type);
                 if (positions.length > 0) {
-                    unlock_button.innerHTML += `<br><span class="queue-badge">Queued #${positions[0]}${positions.length > 1 ? ` ×${positions.length}` : ""}</span>`;
+                    const badge = positions.length <= 4
+                        ? `Queued #${positions.join(", #")}`
+                        : `Queued #${positions.slice(0, 3).join(", #")} +${positions.length - 3} more`;
+                    unlock_button.innerHTML += `<br><span class="queue-badge">${badge}</span>`;
                 }
 
                 (unlock_button as HTMLInputElement).disabled = !prestige_queue_mode && cost > GAMESTATE.divine_spark;

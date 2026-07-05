@@ -193,11 +193,19 @@ order is a strategic tool — you can save toward something big while cheaper
 entries wait behind it). The engine runs every tick the queue is non-empty,
 so it catches every spark source: prestige itself, discovery spark mid-run,
 and spark items. The queue **survives prestige** — buying upgrades right
-after a prestige is its main use — and persists in the save. Buttons show
-`Queued #position` (and `×count` for stacked repeatable entries); there's no
-individual removal, just **Reset Queue**. Entries that become moot (an
-unlock bought manually) drop silently. If the popup is open while the engine
-buys, the buttons refresh on your next interaction with it.
+after a prestige is its main use — and persists in the save. Queue order is
+exactly **click order**, so multiple purchases of the same upgrade are
+independent entries that need not be consecutive — interleave them by
+clicking in the order you want (A, B, A queues A at #1 and #3). Buttons show
+every pending position (`Queued #2, #5`); there's no individual removal,
+just **Reset Queue**. Entries that become moot (an unlock bought manually)
+drop silently. If the popup is open while the engine buys, the buttons
+refresh on your next interaction with it.
+
+**Auto-Buy Cheapest** (toggle next to the queue controls): while the queue
+is *empty*, automatically buy the cheapest affordable purchase in your
+unlocked layers, repeating while anything is affordable. A non-empty queue
+always takes precedence — explicit plans outrank the greedy default.
 
 ## Code map
 
@@ -218,9 +226,9 @@ buys, the buttons refresh on your next interaction with it.
   `setupAutoFillOrderControl()` (`rendering.ts`).
 - **Prestige purchase queue:** `PrestigeBuyEntry` / `prestige_buy_queue`,
   `queuePrestigePurchase()` / `resetPrestigeBuyQueue()` /
-  `getPrestigeQueuePositions()` / `processPrestigeBuyQueue()` (per-tick in
-  `updateGamestate()`); UI in `populatePrestigeView()`
-  (`prestige_queue_mode`, `.queue-badge`).
+  `getPrestigeQueuePositions()` / `processPrestigeBuyQueue()` /
+  `maybeAutoBuyCheapest()` (per-tick in `updateGamestate()`); UI in
+  `populatePrestigeView()` (`prestige_queue_mode`, `.queue-badge`).
 - **Auto-Prestige / spark stats:** `calcSparkPerReset()` (+ per-tick peak in
   `updateGamestate()`), `shouldAutoPrestige()` / `maybeAutoPrestige()`
   (called by rendering's run-end paths instead of `doEnergyReset()`),

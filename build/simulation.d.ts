@@ -191,6 +191,7 @@ export interface GameMods {
     auto_prestige_stall_resets: number;
     auto_prestige_wealth_enabled: boolean;
     auto_prestige_wealth_pct: number;
+    auto_buy_cheapest: boolean;
     threshold_master: boolean;
     threshold_all_skipped: number;
     threshold_perk_affordable_enabled: boolean;

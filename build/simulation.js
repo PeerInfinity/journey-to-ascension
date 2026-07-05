@@ -2434,6 +2434,50 @@ export function processPrestigeBuyQueue() {
         saveGame();
     }
 }
+// Game Mod — with the purchase queue EMPTY, automatically buy the cheapest
+// affordable Divinity purchase (unlockables not yet owned, and repeatables,
+// within unlocked prestige layers), repeating until nothing is affordable.
+// A non-empty queue always takes precedence: explicit plans outrank the
+// greedy default.
+function maybeAutoBuyCheapest() {
+    if (!GAMESTATE.mods.auto_buy_cheapest || GAMESTATE.prestige_buy_queue.length > 0) {
+        return;
+    }
+    let bought = false;
+    for (;;) {
+        let best_cost = Infinity;
+        let buy = null;
+        for (const unlock of PRESTIGE_UNLOCKABLES) {
+            if (!GAMESTATE.prestige_layers_unlocked.includes(unlock.layer) || hasPrestigeUnlock(unlock.type)) {
+                continue;
+            }
+            if (unlock.cost < best_cost) {
+                best_cost = unlock.cost;
+                const type = unlock.type;
+                buy = () => addPrestigeUnlock(type);
+            }
+        }
+        for (const upgrade of PRESTIGE_REPEATABLES) {
+            if (!GAMESTATE.prestige_layers_unlocked.includes(upgrade.layer)) {
+                continue;
+            }
+            const cost = calcPrestigeRepeatableCost(upgrade.type);
+            if (cost < best_cost) {
+                best_cost = cost;
+                const type = upgrade.type;
+                buy = () => increasePrestigeRepeatableLevel(type);
+            }
+        }
+        if (!buy || best_cost > GAMESTATE.divine_spark) {
+            break;
+        }
+        buy();
+        bought = true;
+    }
+    if (bought) {
+        saveGame();
+    }
+}
 // MARK: Auto-Prestige (Game Mod)
 // True when any enabled auto-prestige condition is met. Evaluated at the
 // run-end decision point (the energy-reset moment), where prestige replaces
@@ -2838,6 +2882,7 @@ export function defaultMods() {
         auto_prestige_stall_resets: 3,
         auto_prestige_wealth_enabled: false,
         auto_prestige_wealth_pct: 10,
+        auto_buy_cheapest: false,
         threshold_master: false,
         threshold_all_skipped: THRESHOLD_ALL_SKIPPED_IDLE,
         threshold_perk_affordable_enabled: false,
@@ -3133,6 +3178,7 @@ export function updateGamestate() {
     if (GAMESTATE.prestige_buy_queue.length > 0) {
         processPrestigeBuyQueue();
     }
+    maybeAutoBuyCheapest();
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 window.setProgressMult = (new_mult) => task_progress_mult = new_mult;
