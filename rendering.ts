@@ -2626,23 +2626,39 @@ const THRESHOLD_ROWS: { label: string; tooltip: string; enabled: keyof GameMods;
     },
     {
         label: "Unlocks a Task",
-        tooltip: "Tasks whose unlock target you haven't unlocked yet — in practice, the Bosses that reveal a hidden follow-up Task. Once the unlock is done (unlocks persist across Energy Resets, until Prestige), the Task counts as an Item task instead.",
+        tooltip: "Tasks whose unlock target you haven't unlocked yet — in practice, the Bosses that reveal a hidden follow-up Task. Once the unlock is done (unlocks persist across Energy Resets, until Prestige), the Task counts as Combat instead.",
         enabled: "threshold_unlocker_enabled",
         pct: "threshold_unlocker_pct",
         metric: "threshold_unlocker_metric",
         resets: "threshold_unlocker_resets",
     },
     {
+        label: "Combat",
+        tooltip: "Boss Tasks whose unlock is already done — repeat kills for their Item drops. Bosses are never counted as Item tasks, and while their unlock is pending they count as Unlocks a Task.",
+        enabled: "threshold_combat_enabled",
+        pct: "threshold_combat_pct",
+        metric: "threshold_combat_metric",
+        resets: "threshold_combat_resets",
+    },
+    {
         label: "Awards an Item",
-        tooltip: "Tasks that award an Item on each rep (and don't award an unearned Perk or a still-locked unlock).",
+        tooltip: "Tasks that award an Item on each rep — excluding Bosses (see Combat) and Tasks with an unearned Perk or pending unlock.",
         enabled: "threshold_item_enabled",
         pct: "threshold_item_pct",
         metric: "threshold_item_metric",
         resets: "threshold_item_resets",
     },
     {
+        label: "Prestige",
+        tooltip: "Prestige Tasks — cheap one-shots that enable Prestige (and award Discovery Spark each run, with that mod on).",
+        enabled: "threshold_prestige_enabled",
+        pct: "threshold_prestige_pct",
+        metric: "threshold_prestige_metric",
+        resets: "threshold_prestige_resets",
+    },
+    {
         label: "Progression",
-        tooltip: "Travel, Mandatory, and Prestige Tasks — the ones required to reach the next Zone. Avoid /lvl here: their value is progression, not XP, and a high skill level makes Energy-per-level explode and strand the run.",
+        tooltip: "Travel and Mandatory Tasks — the ones required to reach the next Zone. Avoid /lvl here: their value is progression, not XP, and a high skill level makes Energy-per-level explode and strand the run.",
         enabled: "threshold_progression_enabled",
         pct: "threshold_progression_pct",
         metric: "threshold_progression_metric",
@@ -2763,17 +2779,18 @@ function setupAutoFillControl(content: Element) {
         flashMessage(`Auto-filled priorities for Zones 1-${GAMESTATE.highest_zone + 1}.`);
     });
     setupTooltip(button, () => "Auto-Fill Priorities", () =>
-        "Overwrite ALL reached Zones' automation priorities with a heuristic order: Item-awarding Tasks first, then unearned Perk Tasks (cheapest to finish first), then Prestige Tasks (cheap, one-shot, and the fresh Items boost them), then Task-unlockers, then the rest by skill levels per Energy, with Mandatory and Travel last. Combine with Energy Thresholds to skip whatever isn't currently worth running, and Edit Priorities for touch-ups. Newly unlocked or newly reached content isn't added automatically — click again to include it.");
+        "Overwrite ALL reached Zones' automation priorities using the Auto-Fill Order below (default: Items, Combat, unearned Perks cheapest-first, Prestige, Task-unlockers, the rest by skill levels per Energy, Mandatory, Travel). Combine with Energy Thresholds to skip whatever isn't currently worth running, and Edit Priorities for touch-ups. Newly unlocked or newly reached content isn't added automatically — click again to include it.");
 }
 
 // Auto-Fill Order: the player-configurable category order behind Auto-Fill
 // Priorities / Auto-Prioritize. One row per category with up/down arrows;
 // reordering takes effect immediately while the autopilot is on.
 const AUTO_FILL_CATEGORY_LABELS: Record<string, { label: string; tooltip: string }> = {
-    item: { label: "Awards an Item", tooltip: "Tasks that award an Item on each rep." },
+    item: { label: "Awards an Item", tooltip: "Tasks that award an Item on each rep. Bosses are excluded — they're Combat." },
+    combat: { label: "Combat", tooltip: "Boss Tasks whose unlock is already done — repeat kills for their Item drops. While the unlock is pending a Boss sorts as Unlocks a Task." },
     perk: { label: "New Perks", tooltip: "Tasks whose Perk you haven't earned this Prestige, cheapest to finish first. Earned Perks sort as Everything Else." },
     prestige: { label: "Prestige", tooltip: "Prestige Tasks — one-shot and cheap for their Zone; early completion enables Prestige (and Discovery Spark every run, with that mod on)." },
-    unlocker: { label: "Unlocks a Task", tooltip: "Tasks whose unlock target is still locked. Once unlocked they sort by their remaining traits (usually Awards an Item)." },
+    unlocker: { label: "Unlocks a Task", tooltip: "Tasks whose unlock target is still locked — in practice, uncompleted Bosses. Once unlocked they sort as Combat." },
     plain: { label: "Everything Else", tooltip: "Tasks that fit no other category, ordered by skill levels per Energy." },
     mandatory: { label: "Mandatory", tooltip: "Mandatory Tasks — required (with Prestige Tasks) before Travel unlocks." },
     travel: { label: "Travel", tooltip: "The Zone's Travel Task. Moving this off the end makes automation leave a Zone as soon as Travel is enabled." },
@@ -2789,7 +2806,7 @@ function setupAutoFillOrderControl(content: Element) {
         setupControls();
     });
     setupTooltip(header, () => "Auto-Fill Order", () =>
-        "The category order Auto-Fill Priorities and Auto-Prioritize use: within each Zone, Tasks are grouped by category and the groups are laid out in this order. Rearrange with the arrows; changes apply immediately while Auto-Prioritize is on. The default is: Items, New Perks, Prestige, Unlockers, Everything Else, Mandatory, Travel.");
+        "The category order Auto-Fill Priorities and Auto-Prioritize use: within each Zone, Tasks are grouped by category and the groups are laid out in this order. Rearrange with the arrows; changes apply immediately while Auto-Prioritize is on. The default is: Items, Combat, New Perks, Prestige, Unlockers, Everything Else, Mandatory, Travel.");
 
     if (collapsed) {
         return;

@@ -102,7 +102,7 @@ export interface RunTaskRecord {
     extra_levels_if_ringed: number;
     completed: boolean;
 }
-export type ThresholdCategory = "perk_affordable" | "perk_unaffordable" | "unlocker" | "item" | "progression" | "other";
+export type ThresholdCategory = "perk_affordable" | "perk_unaffordable" | "unlocker" | "combat" | "item" | "prestige" | "progression" | "other";
 export declare const THRESHOLD_METRIC_LEVEL = 0;
 export declare const THRESHOLD_METRIC_REP = 1;
 export declare const THRESHOLD_METRIC_RESETS = 2;
@@ -119,7 +119,7 @@ export declare enum AutomationMode {
     Off = 2
 }
 export declare function toggleAutomation(task: TaskDefinition): void;
-export declare const AUTO_FILL_CATEGORIES: readonly ["item", "perk", "prestige", "unlocker", "plain", "mandatory", "travel"];
+export declare const AUTO_FILL_CATEGORIES: readonly ["item", "combat", "perk", "prestige", "unlocker", "plain", "mandatory", "travel"];
 export type AutoFillCategory = (typeof AUTO_FILL_CATEGORIES)[number];
 export declare function defaultAutoFillOrder(): AutoFillCategory[];
 export declare function getAutoFillOrder(): AutoFillCategory[];
@@ -180,10 +180,18 @@ export interface GameMods {
     threshold_perk_unaffordable_pct: number;
     threshold_perk_unaffordable_metric: number;
     threshold_perk_unaffordable_resets: number;
+    threshold_combat_enabled: boolean;
+    threshold_combat_pct: number;
+    threshold_combat_metric: number;
+    threshold_combat_resets: number;
     threshold_item_enabled: boolean;
     threshold_item_pct: number;
     threshold_item_metric: number;
     threshold_item_resets: number;
+    threshold_prestige_enabled: boolean;
+    threshold_prestige_pct: number;
+    threshold_prestige_metric: number;
+    threshold_prestige_resets: number;
     threshold_progression_enabled: boolean;
     threshold_progression_pct: number;
     threshold_progression_metric: number;

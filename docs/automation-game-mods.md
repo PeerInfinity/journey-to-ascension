@@ -34,9 +34,9 @@ save from before a mod existed simply gets that mod off.
 | **Artifact Tasks: Item Cycles Only** | Only run scheduled artifact tasks while Auto Use Items is enabled (see [artifact-tasks.md](artifact-tasks.md)). |
 | **Auto Dreamcatcher** | Use a held Dreamcatcher before a task rep that would consume at least a set percentage of current energy (default 25%) — i.e. late in the run, when its "duplicate everything found this reset" effect is near its biggest. One per qualifying rep; only while Auto Use Items is enabled. |
 | **Auto Magic Ring** | Spend held Magic Rings (5× XP for one rep) on the tasks where they help most, ranked from last run's completions. Tasks ranked within the Ring budget (held + already spent this run) each get one Ring; Rings found mid-run widen the budget. Needs one completed run of history; only while Auto Use Items is enabled. |
-| **Auto-Fill Priorities** | (Button, not a toggle.) Overwrite every reached zone's automation priorities with a heuristic order: item-awarding tasks, then unearned perk tasks (cheapest to finish first), then Prestige tasks (one-shot, cheap for their zone, and the fresh items boost them), task-unlockers, the rest by skill levels per energy, then Mandatory with Travel last. Earned perks and done unlocks sort as plain tasks — below Prestige. Re-click after unlocking or reaching new content. |
+| **Auto-Fill Priorities** | (Button, not a toggle.) Overwrite every reached zone's automation priorities using the Auto-Fill Order (default: item-awarding tasks, Combat, unearned perk tasks cheapest-first, Prestige tasks, task-unlockers, the rest by skill levels per energy, then Mandatory with Travel last). Earned perks sort as plain tasks; Bosses sort as Unlocks-a-Task until their unlock is done, then as Combat — never as item tasks. Re-click after unlocking or reaching new content. |
 | **Auto-Prioritize** | Autopilot for the above: re-runs Auto-Fill automatically at every Energy Reset and Prestige, on task unlock, and on zone entry, so the order always reflects current skills and energy. Overwrites manual edits while on. Mutually exclusive with **Queue Cycling**. |
-| **Auto-Fill Order** | Collapsible editor for the category order Auto-Fill/Auto-Prioritize use. Rearrange the seven categories (Items, New Perks, Prestige, Unlockers, Everything Else, Mandatory, Travel) with the arrows; reset restores the default. Reorders apply immediately while Auto-Prioritize is on. Classification is fixed (and perk/unlocker categories still track earned/unlocked state) — only the group order is configurable. |
+| **Auto-Fill Order** | Collapsible editor for the category order Auto-Fill/Auto-Prioritize use. Rearrange the eight categories (Items, Combat, New Perks, Prestige, Unlockers, Everything Else, Mandatory, Travel) with the arrows; reset restores the default. Reorders apply immediately while Auto-Prioritize is on. Classification is fixed (and perk/unlocker categories still track earned/unlocked state) — only the group order is configurable. |
 | **Energy Thresholds** | Skip prioritized tasks that aren't worth their energy — per-category energy-per-level thresholds; see below. |
 | **When All Skipped** | (Under Energy Thresholds) What happens when every remaining prioritized task is over its threshold: **Idle** (stop + notify), **End Run** (trigger the Energy Reset), or **Best Task** (run the skipped task that would earn the most total skill levels from the remaining energy). |
 
@@ -128,24 +128,26 @@ tasks always run.**
    could provide.
 2. **New Perk (out of reach)** — awards an unearned perk, but finishing it does
    *not* fit this cycle even with your Artifacts.
-3. **Unlocks a Task** — its unlock target is still locked. Checked *before*
-   the item category deliberately: every unlocker in the game is a Boss that
-   also awards an item, so the other order would leave this category
-   permanently empty. Unlocks persist across energy resets (until prestige).
-4. **Awards an Item** — grants an Item on each rep.
-5. **Progression** — Travel, Mandatory, and Prestige tasks. Avoid /lvl here:
-   their value is progression, not XP, and the /lvl metric explodes once the
-   task's skill outlevels early-zone XP — a farmed-up skill would make an old
-   zone's Travel task look infinitely expensive per level and strand the run
-   there.
-6. **Everything else.**
+3. **Unlocks a Task** — its unlock target is still locked (in practice, an
+   uncompleted Boss). Unlocks persist across energy resets (until prestige).
+4. **Combat** — Boss tasks whose unlock is already done. Bosses are *never*
+   item tasks, even though every Boss drops one: repeat kills are their own
+   kind of decision.
+5. **Awards an Item** — grants an Item on each rep (Bosses excluded).
+6. **Prestige** — Prestige tasks: cheap one-shots that enable prestige (and
+   award discovery spark each run, with that mod on).
+7. **Progression** — Travel and Mandatory tasks. Avoid /lvl here: their value
+   is progression, not XP, and the /lvl metric explodes once the task's skill
+   outlevels early-zone XP — a farmed-up skill would make an old zone's
+   Travel task look infinitely expensive per level and strand the run there.
+8. **Everything else.**
 
 Categories track live state, so tasks migrate as their purpose is spent: the
 two perk categories swap with your energy and Artifacts, an earned perk drops
 the task to whichever later category fits, and a completed unlock turns its
-Boss into a plain item farm (first kill of a prestige judges as "Unlocks a
-Task", every later kill as "Awards an Item"). Synthetic tasks and skill-less
-tasks are always exempt.
+Boss into a Combat task (first kill of a prestige judges as "Unlocks a Task",
+every later kill as "Combat"). Synthetic tasks and skill-less tasks are
+always exempt.
 
 Threshold skipping always *skips* (it never pauses automation, regardless of
 the Skip/Pause on Blocked Tasks setting). If **everything** left is skipped,

@@ -1744,29 +1744,37 @@ export const THRESHOLD_METRIC_RESETS = 2; // energy resets until fully completab
 const THRESHOLD_MOD_KEYS = {
     perk_affordable: { enabled: "threshold_perk_affordable_enabled", pct: "threshold_perk_affordable_pct", metric: "threshold_perk_affordable_metric", resets: "threshold_perk_affordable_resets" },
     perk_unaffordable: { enabled: "threshold_perk_unaffordable_enabled", pct: "threshold_perk_unaffordable_pct", metric: "threshold_perk_unaffordable_metric", resets: "threshold_perk_unaffordable_resets" },
-    item: { enabled: "threshold_item_enabled", pct: "threshold_item_pct", metric: "threshold_item_metric", resets: "threshold_item_resets" },
-    progression: { enabled: "threshold_progression_enabled", pct: "threshold_progression_pct", metric: "threshold_progression_metric", resets: "threshold_progression_resets" },
     unlocker: { enabled: "threshold_unlocker_enabled", pct: "threshold_unlocker_pct", metric: "threshold_unlocker_metric", resets: "threshold_unlocker_resets" },
+    combat: { enabled: "threshold_combat_enabled", pct: "threshold_combat_pct", metric: "threshold_combat_metric", resets: "threshold_combat_resets" },
+    item: { enabled: "threshold_item_enabled", pct: "threshold_item_pct", metric: "threshold_item_metric", resets: "threshold_item_resets" },
+    prestige: { enabled: "threshold_prestige_enabled", pct: "threshold_prestige_pct", metric: "threshold_prestige_metric", resets: "threshold_prestige_resets" },
+    progression: { enabled: "threshold_progression_enabled", pct: "threshold_progression_pct", metric: "threshold_progression_metric", resets: "threshold_progression_resets" },
     other: { enabled: "threshold_other_enabled", pct: "threshold_other_pct", metric: "threshold_other_metric", resets: "threshold_other_resets" },
 };
-const THRESHOLD_CATEGORY_LIST = ["perk_affordable", "perk_unaffordable", "item", "progression", "unlocker", "other"];
+const THRESHOLD_CATEGORY_LIST = ["perk_affordable", "perk_unaffordable", "unlocker", "combat", "item", "prestige", "progression", "other"];
 export function getThresholdCategory(task) {
     const def = task.task_definition;
     if (def.perk != PerkType.Count && !hasPerk(def.perk)) {
         return isPerkTaskAffordableThisCycle(task) ? "perk_affordable" : "perk_unaffordable";
     }
-    // Checked before the item branch: every unlocker in the game data is a
-    // Boss that also awards an item, so with item first this category would
-    // never match. While the unlock target is still locked the task judges
-    // as an unlocker; once unlocked (unlocks persist across energy resets,
-    // wiped on prestige) it drops through and counts as an item farm.
+    // Checked before combat/item: while the unlock target is still locked
+    // (unlocks persist across energy resets, wiped on prestige) any task —
+    // in the game data, always an uncompleted Boss — judges as an unlocker.
     if (def.unlocks_task >= 0 && !GAMESTATE.unlocked_tasks.includes(def.unlocks_task)) {
         return "unlocker";
+    }
+    // Combat before item (user ruling): every Boss drops an item, but repeat
+    // kills are their own kind of decision, not generic item farming.
+    if (def.type == TaskType.Boss) {
+        return "combat";
     }
     if (def.item != ItemType.Count) {
         return "item";
     }
-    if (def.type == TaskType.Travel || def.type == TaskType.Mandatory || def.type == TaskType.Prestige) {
+    if (def.type == TaskType.Prestige) {
+        return "prestige";
+    }
+    if (def.type == TaskType.Travel || def.type == TaskType.Mandatory) {
         return "progression";
     }
     return "other";
@@ -2038,14 +2046,16 @@ export function toggleAutomation(task) {
 // XP by yield. Earned perks demote to the plain group, BELOW prestige (user
 // ruling). Mandatory and Travel close the default list — the same
 // travel-last invariant toggleAutomation maintains.
-export const AUTO_FILL_CATEGORIES = ["item", "perk", "prestige", "unlocker", "plain", "mandatory", "travel"];
+export const AUTO_FILL_CATEGORIES = ["item", "combat", "perk", "prestige", "unlocker", "plain", "mandatory", "travel"];
 export function defaultAutoFillOrder() {
     return [...AUTO_FILL_CATEGORIES];
 }
 // The saved order, sanitized against the canonical set: known keys keep
-// their saved order (first occurrence wins), unknown keys drop, missing
-// keys append in default order — so a category added in a later version
-// lands at the end of an old save's list instead of nowhere.
+// their saved order (first occurrence wins), unknown keys drop, and missing
+// keys are inserted right after their nearest preceding default-order
+// neighbor that IS present — so a category added in a later version lands at
+// its intended default position in an old save's list (e.g. combat directly
+// after item), not at the end.
 export function getAutoFillOrder() {
     const saved = Array.isArray(GAMESTATE.auto_fill_order) ? GAMESTATE.auto_fill_order : [];
     const order = [];
@@ -2054,10 +2064,20 @@ export function getAutoFillOrder() {
             order.push(key);
         }
     }
-    for (const key of AUTO_FILL_CATEGORIES) {
-        if (!order.includes(key)) {
-            order.push(key);
+    for (let i = 0; i < AUTO_FILL_CATEGORIES.length; i++) {
+        const key = AUTO_FILL_CATEGORIES[i];
+        if (order.includes(key)) {
+            continue;
         }
+        let insert_at = 0;
+        for (let j = i - 1; j >= 0; j--) {
+            const prev_index = order.indexOf(AUTO_FILL_CATEGORIES[j]);
+            if (prev_index >= 0) {
+                insert_at = prev_index + 1;
+                break;
+            }
+        }
+        order.splice(insert_at, 0, key);
     }
     return order;
 }
@@ -2094,6 +2114,13 @@ function autoFillCategory(def) {
     }
     if (def.type == TaskType.Mandatory) {
         return "mandatory";
+    }
+    // Bosses are never item tasks (user ruling), even though every Boss
+    // drops one: while its unlock is pending it sorts as an unlocker,
+    // afterwards as combat.
+    if (def.type == TaskType.Boss) {
+        return def.unlocks_task >= 0 && !GAMESTATE.unlocked_tasks.includes(def.unlocks_task)
+            ? "unlocker" : "combat";
     }
     if (def.item != ItemType.Count) {
         return "item";
@@ -2639,10 +2666,18 @@ export function defaultMods() {
         threshold_perk_unaffordable_pct: 25,
         threshold_perk_unaffordable_metric: THRESHOLD_METRIC_RESETS,
         threshold_perk_unaffordable_resets: 3,
+        threshold_combat_enabled: false,
+        threshold_combat_pct: 100,
+        threshold_combat_metric: THRESHOLD_METRIC_RESETS,
+        threshold_combat_resets: 3,
         threshold_item_enabled: false,
         threshold_item_pct: 50,
         threshold_item_metric: THRESHOLD_METRIC_RESETS,
         threshold_item_resets: 3,
+        threshold_prestige_enabled: false,
+        threshold_prestige_pct: 100,
+        threshold_prestige_metric: THRESHOLD_METRIC_RESETS,
+        threshold_prestige_resets: 3,
         threshold_progression_enabled: false,
         threshold_progression_pct: 100,
         threshold_progression_metric: THRESHOLD_METRIC_RESETS,
