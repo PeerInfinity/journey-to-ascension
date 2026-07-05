@@ -3831,10 +3831,16 @@ export function updateGamestate() {
     checkEnergyReset();
 
     // Track the peak spark-per-reset since the last prestige (cheap formula;
-    // it can rise mid-run when a new highest zone is reached).
-    const spark_rate = calcSparkPerReset();
-    if (spark_rate > GAMESTATE.peak_spark_per_reset) {
-        GAMESTATE.peak_spark_per_reset = spark_rate;
+    // it can rise mid-run when a new highest zone is reached). Only while
+    // prestige is actually AVAILABLE: the base gain exists on paper from run
+    // one (100 / 1 run = an instant, meaningless peak of 100 — user-reported)
+    // but it isn't claimable until the Prestige task is completed, so the
+    // first real peak is gain / the resets it took to first reach it.
+    if (GAMESTATE.prestige_available) {
+        const spark_rate = calcSparkPerReset();
+        if (spark_rate > GAMESTATE.peak_spark_per_reset) {
+            GAMESTATE.peak_spark_per_reset = spark_rate;
+        }
     }
 
     if (GAMESTATE.prestige_buy_queue.length > 0) {

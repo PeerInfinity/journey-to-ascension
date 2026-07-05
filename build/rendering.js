@@ -1583,7 +1583,7 @@ const SETTINGS_MOD_TOGGLES = [
     {
         id: "mod-show-spark-stats",
         label: "Show Spark per Reset",
-        tooltip: "Shows, under the Divine Spark button, the Divine Spark a prestige would award averaged over this prestige's runs (Energy Resets so far plus the current run), the peak that average has reached since the last prestige, and how many resets in a row have passed without reaching a new highest Zone. The average jumps when you reach a new highest Zone and decays each reset while you plateau — when it sags well below its peak, this prestige has stopped paying. These are the raw signals behind the Auto-Prestige triggers.",
+        tooltip: "Shows, under the Divine Spark button, the Divine Spark a prestige would award averaged over this prestige's runs (Energy Resets so far plus the current run), the peak that average has reached since the last prestige, and how many resets in a row have passed without reaching a new highest Zone. The peak only starts counting once Prestige is actually available — so it reads as the gain divided by the resets it took to first reach it, not the on-paper base gain of run one. When the average sags well below its peak, this prestige has stopped paying. These are the raw signals behind the Auto-Prestige triggers.",
         mod: "show_spark_stats",
     },
 ];
