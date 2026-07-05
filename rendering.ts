@@ -1918,7 +1918,7 @@ const SETTINGS_MOD_TOGGLES: { id: string; label: string; tooltip: string; mod: k
     {
         id: "mod-show-spark-stats",
         label: "Show Spark per Reset",
-        tooltip: "Shows, under the Divine Spark button, the Divine Spark a prestige would award averaged over this prestige's runs (Energy Resets so far plus the current run), and the peak that average has reached since the last prestige. The average jumps when you reach a new highest Zone and decays each reset while you plateau — when it sags well below its peak, this prestige has stopped paying.",
+        tooltip: "Shows, under the Divine Spark button, the Divine Spark a prestige would award averaged over this prestige's runs (Energy Resets so far plus the current run), the peak that average has reached since the last prestige, and how many resets in a row have passed without reaching a new highest Zone. The average jumps when you reach a new highest Zone and decays each reset while you plateau — when it sags well below its peak, this prestige has stopped paying. These are the raw signals behind the Auto-Prestige triggers.",
         mod: "show_spark_stats",
     },
 ];
@@ -3310,7 +3310,8 @@ function updateExtraStats() {
         // formatNumber, not formatInt: on a long never-prestiged save the
         // rate is genuinely below 1 (gain / every reset ever) and toFixed(0)
         // made it look stuck at "0/reset".
-        prestige_text += `<div class="spark-rate-text">${formatNumber(calcSparkPerReset())}/reset · peak ${formatNumber(GAMESTATE.peak_spark_per_reset)}</div>`;
+        prestige_text += `<div class="spark-rate-text">${formatNumber(calcSparkPerReset())}/reset · peak ${formatNumber(GAMESTATE.peak_spark_per_reset)}`
+            + `<br>${formatInt(GAMESTATE.resets_since_highest_zone_gain)} resets since new Zone</div>`;
     }
     if (RENDERING.open_prestige_element.innerHTML != prestige_text) {
         RENDERING.open_prestige_element.innerHTML = prestige_text;

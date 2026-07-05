@@ -20,7 +20,7 @@ save from before a mod existed simply gets that mod off.
 | **Force Automation** | Permanently grants the Amulet (automation) perk. |
 | **Auto-Continue Energy Reset** | Skip the energy-reset summary overlay. |
 | **Suppress Prestige Popup** | Don't show the "prestige available" popup. |
-| **Show Spark per Reset** | Under the Divine Spark button, show prospective prestige spark averaged over this prestige's runs (resets so far + the current run), plus the peak that average has reached since the last prestige. Jumps on a new highest zone, decays each reset while plateaued — the raw signal behind the auto-prestige triggers. |
+| **Show Spark per Reset** | Under the Divine Spark button, show prospective prestige spark averaged over this prestige's runs (resets so far + the current run), the peak that average has reached since the last prestige, and how many resets in a row have passed without a new highest zone. Jumps on a new highest zone, decays each reset while plateaued — the raw signals behind the auto-prestige triggers. |
 | **Skip / Pause on Blocked Tasks** | Existing upstream toggle; documented here because it interacts with automation: when automation reaches a task it can't start (e.g. a Boss that's too strong), *Pause* stops automation, *Skip* moves past it. See [balance-and-qol.md](balance-and-qol.md). |
 
 ## Advanced Automation panel
