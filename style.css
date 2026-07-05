@@ -1067,10 +1067,10 @@ footer {
     text-align: left;
 }
 
-/* Spark-per-reset stats under the Divine Spark button (Show Spark per Reset mod) */
+/* Spark-per-reset stats under the Divine Spark button (Show Spark per Reset mod).
+   rem, not em: the button's own font is smaller than normal document text. */
 .spark-rate-text {
-    font-size: 0.7em;
-    opacity: 0.85;
+    font-size: 1rem;
     margin-top: 2px;
 }
 
