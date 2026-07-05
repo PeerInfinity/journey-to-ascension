@@ -151,11 +151,13 @@ always exempt.
 
 All three metrics judge a task the way you'd actually attempt it: while you
 hold (or have queued) a **Scroll of Haste**, costs are computed as if a
-Scroll will be spent — one hasted rep per available Scroll (the /rst
-completability check splits reps into hasted and plain accordingly; the
-grind projection stays unhasted, conservatively). Without this, a task like
-Touch the Divine gets skipped on its unhasted cost even though starting it
-with a Scroll succeeds.
+Scroll will be spent — one hasted rep per available Scroll. The /rst
+completability check splits reps into hasted and plain accordingly, and the
+multi-reset grind projection assumes the same Scrolls are available every
+simulated reset (a Scroll you have now, you'll presumably have next run), so
+each run grinds its hasted reps first at five times the progress per energy.
+Without this, a task like Touch the Divine gets skipped on its unhasted cost
+even though starting it with a Scroll succeeds.
 
 Threshold skipping always *skips* (it never pauses automation, regardless of
 the Skip/Pause on Blocked Tasks setting). If **everything** left is skipped,

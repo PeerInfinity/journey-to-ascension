@@ -2327,11 +2327,26 @@ export function estimateResetsToComplete(task: Task, max_resets: number): number
         }
 
         // Grind this run's whole budget into the task; XP is linear in the
-        // progress achieved. Level-ups during the run would speed it up
-        // further, so this is a (slightly) conservative estimate. Ceil, not
-        // floor: the last tick of a run overdrafts (see above).
-        const ticks = Math.ceil(budget / drain);
-        const progress = Math.min(ticks * progress_per_tick, cost * reps);
+        // progress achieved. Held Scrolls apply here too (user ruling: a
+        // Scroll available this reset is assumed available in future resets),
+        // so up to `scrolls` reps grind hasted — five times the progress per
+        // energy — before the remainder grinds plain. Level-ups during the
+        // run would speed it up further, so this is a (slightly)
+        // conservative estimate. Ceil, not floor: the last tick of a run
+        // overdrafts (see above).
+        let remaining_budget = budget;
+        let progress = 0;
+        let reps_left = reps;
+        for (let s = 0; s < hasted_reps && reps_left > 0 && remaining_budget > 0; s++) {
+            const rep_ticks = Math.min(calcTaskTicks(hasted_progress, cost), Math.ceil(remaining_budget / hasted_drain));
+            progress += Math.min(rep_ticks * hasted_progress, cost);
+            remaining_budget -= rep_ticks * hasted_drain;
+            reps_left -= 1;
+        }
+        if (remaining_budget > 0 && reps_left > 0) {
+            const ticks = Math.ceil(remaining_budget / drain);
+            progress += Math.min(ticks * progress_per_tick, cost * reps_left);
+        }
         const xp = calcSkillXp(task, progress, true);
         if (xp <= 0) {
             break; // can't even tick once — no growth is coming, ever
