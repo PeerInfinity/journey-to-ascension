@@ -2789,7 +2789,10 @@ function updateExtraStats() {
     // Game Mod — spark stats: prospective spark averaged over this
     // prestige's runs, plus the peak that average has reached.
     if (isModEnabled("show_spark_stats")) {
-        prestige_text += `<div class="spark-rate-text">${formatInt(calcSparkPerReset())}/reset · peak ${formatInt(GAMESTATE.peak_spark_per_reset)}</div>`;
+        // formatNumber, not formatInt: on a long never-prestiged save the
+        // rate is genuinely below 1 (gain / every reset ever) and toFixed(0)
+        // made it look stuck at "0/reset".
+        prestige_text += `<div class="spark-rate-text">${formatNumber(calcSparkPerReset())}/reset · peak ${formatNumber(GAMESTATE.peak_spark_per_reset)}</div>`;
     }
     if (RENDERING.open_prestige_element.innerHTML != prestige_text) {
         RENDERING.open_prestige_element.innerHTML = prestige_text;
