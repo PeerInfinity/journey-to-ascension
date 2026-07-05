@@ -2841,6 +2841,17 @@ export function calcDivineSparkGain() {
     return calcDivineSparkGainFromHighestZone(GAMESTATE.highest_zone)
 }
 
+// Prospective spark from prestiging now, averaged over this prestige's runs
+// (energy resets so far plus the run in progress, so it's defined from run
+// one). The efficiency signal behind the spark stats display and the
+// auto-prestige triggers: it jumps when a new highest zone is reached
+// (spark roughly doubles per zone) and decays at every reset while progress
+// plateaus. The peak since the last prestige is tracked per tick in
+// updateGamestate and wiped by doPrestige.
+export function calcSparkPerReset(): number {
+    return calcDivineSparkGain() / (GAMESTATE.energy_reset_count + 1);
+}
+
 export function hasPrestigeUnlock(unlock: PrestigeUnlockType) {
     return GAMESTATE.prestige_unlocks.includes(unlock);
 }
@@ -2991,6 +3002,7 @@ export function doPrestige() {
     GAMESTATE.run_history_by_context = {};
     GAMESTATE.ring_plan = [];
     GAMESTATE.ring_plan_used = [];
+    GAMESTATE.peak_spark_per_reset = 0;
 
     // Re-apply mods after the perk wipe so force_automation re-grants the
     // Amulet that gates automation and auto-use.
@@ -3212,6 +3224,7 @@ export interface GameMods {
     force_automation: boolean;           // permanently grant the Amulet (automation) perk
     auto_continue_energy_reset: boolean; // skip the energy-reset summary overlay
     suppress_prestige_popup: boolean;    // suppress the "prestige available" popup
+    show_spark_stats: boolean;           // show spark-per-reset (current + peak) under the Divine Spark button
 
     // Advanced Automation panel — Controls section (right column)
     resume_automation_on_reset: boolean; // restore automation mode/target after a reset
@@ -3277,6 +3290,7 @@ export function defaultMods(): GameMods {
         force_automation: false,
         auto_continue_energy_reset: false,
         suppress_prestige_popup: false,
+        show_spark_stats: false,
         resume_automation_on_reset: false,
         auto_haste: false,
         auto_lightning: false,
@@ -3437,6 +3451,10 @@ export class Gamestate {
     // sanitized on read by getAutoFillOrder(). Stored as plain strings.
     auto_fill_order: string[] = defaultAutoFillOrder();
     auto_fill_order_collapsed = true;
+
+    // Spark stats (Game Mod): highest calcSparkPerReset() seen since the
+    // last prestige. Feeds the display and the ratio auto-prestige trigger.
+    peak_spark_per_reset = 0;
 
     current_zone: number = 0;
     highest_zone: number = 0;
@@ -3600,6 +3618,13 @@ export function updateGamestate() {
     updateActiveTask();
     autoUseItems();
     checkEnergyReset();
+
+    // Track the peak spark-per-reset since the last prestige (cheap formula;
+    // it can rise mid-run when a new highest zone is reached).
+    const spark_rate = calcSparkPerReset();
+    if (spark_rate > GAMESTATE.peak_spark_per_reset) {
+        GAMESTATE.peak_spark_per_reset = spark_rate;
+    }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

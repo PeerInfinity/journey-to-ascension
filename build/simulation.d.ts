@@ -143,6 +143,7 @@ export declare const BASE_PRESTIGE_GAIN = 100;
 export declare function getPrestigeGainExponent(): number;
 export declare function calcDivineSparkGainFromHighestZone(zone: number): number;
 export declare function calcDivineSparkGain(): number;
+export declare function calcSparkPerReset(): number;
 export declare function hasPrestigeUnlock(unlock: PrestigeUnlockType): boolean;
 export declare function getPrestigeRepeatableLevel(repeatable: PrestigeRepeatableType): number;
 export declare function addPrestigeUnlock(unlock: PrestigeUnlockType): void;
@@ -158,6 +159,7 @@ export interface GameMods {
     force_automation: boolean;
     auto_continue_energy_reset: boolean;
     suppress_prestige_popup: boolean;
+    show_spark_stats: boolean;
     resume_automation_on_reset: boolean;
     auto_haste: boolean;
     auto_lightning: boolean;
@@ -227,6 +229,7 @@ export declare class Gamestate {
     ring_plan_used: string[];
     auto_fill_order: string[];
     auto_fill_order_collapsed: boolean;
+    peak_spark_per_reset: number;
     current_zone: number;
     highest_zone: number;
     highest_zone_fully_completed: number;

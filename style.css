@@ -1067,6 +1067,13 @@ footer {
     text-align: left;
 }
 
+/* Spark-per-reset stats under the Divine Spark button (Show Spark per Reset mod) */
+.spark-rate-text {
+    font-size: 0.7em;
+    opacity: 0.85;
+    margin-top: 2px;
+}
+
 /* MARK: Artifact Task Sections
 */
 
