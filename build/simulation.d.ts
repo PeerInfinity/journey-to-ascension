@@ -5,7 +5,7 @@ import { RenderEvent } from "./events.js";
 import { SkillType } from "./skills.js";
 import { PrestigeRepeatableType, PrestigeUnlockType, PrestigeLayer } from "./prestige_upgrades.js";
 export declare function isManagedMode(): boolean;
-export declare const SAVE_VERSION = "Fork 1.4";
+export declare const SAVE_VERSION = "Fork 1.5";
 export declare class Skill {
     type: SkillType;
     level: number;
@@ -194,6 +194,8 @@ export interface GameMods {
     auto_prestige_wealth_enabled: boolean;
     auto_prestige_wealth_pct: number;
     auto_buy_cheapest: boolean;
+    auto_buy_budget_enabled: boolean;
+    auto_buy_budget_pct: number;
     threshold_master: boolean;
     threshold_all_skipped: number;
     threshold_perk_affordable_enabled: boolean;
@@ -252,6 +254,7 @@ export declare class Gamestate {
     auto_fill_order: string[];
     auto_fill_order_collapsed: boolean;
     prestige_buy_queue: PrestigeBuyEntry[];
+    repeatable_spend_since_unlock: number;
     peak_spark_per_reset: number;
     resets_since_highest_zone_gain: number;
     current_zone: number;

@@ -6,6 +6,11 @@ export class ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
+        version: "Fork 1.5",
+        date: "2026-07-05",
+        changes: "- Added Unlock Savings (Divinity popup, next to Auto-Buy Cheapest): while enabled, Auto-Buy Cheapest buys unlockables the moment they're affordable (cheapest first) and budgets repeatable purchases — repeatable spending since the last unlockable purchase stays within a set percentage (default 100%) of the cheapest not-yet-owned unlockable's cost, so cheap repeatables can't soak up Divine Spark forever just below a big unlockable's price. Once every unlockable in your unlocked layers is owned, spending is unrestricted. Manual and queued purchases count toward the same budget window, and the explicit purchase queue still outranks all auto-buying<br>"
+    },
+    {
         version: "Fork 1.4",
         date: "2026-07-03",
         changes: "- Added Instant Mode (Advanced Automation, gated behind Allow Instant Mode in Settings): tasks complete all remaining reps in a single tick, billing the same Energy and XP as normal play. Off by default; revoking the Settings gate hides the toggle and switches the mode off<br>"

@@ -1361,6 +1361,27 @@ function populatePrestigeView() {
             populatePrestigeView();
         });
         setupTooltip(cheapest_button, () => `Auto-Buy Cheapest: ${GAMESTATE.mods.auto_buy_cheapest ? "On" : "Off"}`, () => "While the purchase queue is EMPTY, automatically buy the cheapest affordable Divinity purchase (in your unlocked layers), repeating while anything is affordable. A non-empty queue always takes precedence — explicit plans outrank the greedy default.");
+        const budget_button = createChildElement(queue_controls, "button");
+        budget_button.className = GAMESTATE.mods.auto_buy_budget_enabled ? "on" : "off";
+        budget_button.textContent = `Unlock Savings: ${GAMESTATE.mods.auto_buy_budget_enabled ? "On" : "Off"}`;
+        budget_button.addEventListener("click", () => {
+            setMod("auto_buy_budget_enabled", !GAMESTATE.mods.auto_buy_budget_enabled);
+            populatePrestigeView();
+        });
+        setupTooltip(budget_button, () => `Unlock Savings: ${GAMESTATE.mods.auto_buy_budget_enabled ? "On" : "Off"}`, () => "Makes Auto-Buy Cheapest save for Unlockables: they're bought the moment they're affordable (cheapest first), and Repeatable purchases are budgeted — Repeatable spending since the last Unlockable purchase stays within the set percentage of the cheapest not-yet-owned Unlockable's cost, so cheap Repeatables can't soak up Divine Spark forever just below a big Unlockable's price. Once every Unlockable in your unlocked layers is owned, spending is unrestricted. Manual and queued purchases count toward the same budget.");
+        if (GAMESTATE.mods.auto_buy_budget_enabled) {
+            const budget_label = createChildElement(queue_controls, "label");
+            budget_label.textContent = "Repeatable budget, % of next Unlockable:";
+            createNumericInput(budget_label, {
+                min: 0,
+                max: 10000,
+                initialValue: GAMESTATE.mods.auto_buy_budget_pct,
+                ariaLabel: "Unlock Savings budget, repeatable spending as % of the cheapest unowned Unlockable's cost",
+                onChange: (value) => {
+                    setMod("auto_buy_budget_pct", value);
+                },
+            });
+        }
     }
     const PRESTIGE_LAYER_NAMES = ["Touch the Divine", "Transcend Humanity", "Embrace Divinity", "Ascend to Godhood"];
     for (const prestige_layer of GAMESTATE.prestige_layers_unlocked) {

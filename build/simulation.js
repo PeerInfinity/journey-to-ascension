@@ -38,7 +38,7 @@ const DEFAULT_TICK_RATE = 66.6;
 // upstream's save version. The Changelog popup checks SAVE_VERSION against the
 // newest CHANGELOG entry, so keep this equal to CHANGELOG[0].version — bump both
 // together when adding a fork changelog entry.
-export const SAVE_VERSION = "Fork 1.4";
+export const SAVE_VERSION = "Fork 1.5";
 const TASK_STARTED_PROGRESS = 0.01;
 // Player-scheduled "use this artifact here" tasks get ids in this range — well
 // above zone task ids and the host's synthetic exit tasks (>= 10000) — so they
@@ -2445,6 +2445,12 @@ function maybeAutoBuyCheapest() {
     if (!GAMESTATE.mods.auto_buy_cheapest || GAMESTATE.prestige_buy_queue.length > 0) {
         return;
     }
+    if (GAMESTATE.mods.auto_buy_budget_enabled) {
+        if (autoBuyWithUnlockBudget()) {
+            saveGame();
+        }
+        return;
+    }
     let bought = false;
     for (;;) {
         let best_cost = Infinity;
@@ -2478,6 +2484,60 @@ function maybeAutoBuyCheapest() {
     }
     if (bought) {
         saveGame();
+    }
+}
+// Game Mod — Unlock Savings: Auto-Buy Cheapest with a budget on repeatables,
+// so cheap low-exponent repeatables can't soak Divine Spark forever just
+// below each unlockable's price point. Unlockables (cheapest first) are
+// bought the moment they're affordable — each purchase starts a fresh budget
+// window. The cheapest repeatable is bought only while repeatable spending
+// since the last unlockable purchase stays within auto_buy_budget_pct% of the
+// cheapest unowned unlockable's cost; with no unowned unlockable in the
+// unlocked layers, spending is unrestricted. Simulated on the harness
+// (CC/scripts/jta-stats, outer repo): pulls Mastery of Time / See Beyond the
+// Veil forward by ~70 runs and roughly doubles long-run Spark income vs pure
+// cheapest; the buy-unlockables-first ordering also matters — pure greedy can
+// dribble Spark below an affordable unlockable's price right before buying it.
+function autoBuyWithUnlockBudget() {
+    let bought = false;
+    for (;;) {
+        let next_unlock = null;
+        for (const unlock of PRESTIGE_UNLOCKABLES) {
+            if (!GAMESTATE.prestige_layers_unlocked.includes(unlock.layer) || hasPrestigeUnlock(unlock.type)) {
+                continue;
+            }
+            if (!next_unlock || unlock.cost < next_unlock.cost) {
+                next_unlock = unlock;
+            }
+        }
+        if (next_unlock && next_unlock.cost <= GAMESTATE.divine_spark) {
+            addPrestigeUnlock(next_unlock.type);
+            bought = true;
+            continue;
+        }
+        let best = null;
+        let best_cost = Infinity;
+        for (const upgrade of PRESTIGE_REPEATABLES) {
+            if (!GAMESTATE.prestige_layers_unlocked.includes(upgrade.layer)) {
+                continue;
+            }
+            const cost = calcPrestigeRepeatableCost(upgrade.type);
+            if (cost < best_cost) {
+                best = upgrade;
+                best_cost = cost;
+            }
+        }
+        if (!best || best_cost > GAMESTATE.divine_spark) {
+            return bought;
+        }
+        if (next_unlock) {
+            const budget = (GAMESTATE.mods.auto_buy_budget_pct / 100) * next_unlock.cost;
+            if (GAMESTATE.repeatable_spend_since_unlock + best_cost > budget) {
+                return bought;
+            }
+        }
+        increasePrestigeRepeatableLevel(best.type);
+        bought = true;
     }
 }
 // MARK: Auto-Prestige (Game Mod)
@@ -2591,6 +2651,7 @@ export function addPrestigeUnlock(unlock) {
     }
     GAMESTATE.divine_spark -= definition.cost;
     GAMESTATE.prestige_unlocks.push(unlock);
+    GAMESTATE.repeatable_spend_since_unlock = 0; // fresh Unlock Savings window
     const show_notification = true;
     applyPrestigeUnlockEffects(unlock, show_notification);
 }
@@ -2609,6 +2670,7 @@ export function increasePrestigeRepeatableLevel(repeatable) {
     const current_level = getPrestigeRepeatableLevel(repeatable);
     GAMESTATE.prestige_repeatables.set(repeatable, current_level + 1);
     GAMESTATE.divine_spark -= cost;
+    GAMESTATE.repeatable_spend_since_unlock += cost;
     if (repeatable == PrestigeRepeatableType.TranscendantAptitude) {
         const global_target_level = (current_level + 1) * TRANSCENDANT_APTITUDE_MULT;
         for (const skill of GAMESTATE.skills) {
@@ -2887,6 +2949,8 @@ export function defaultMods() {
         auto_prestige_wealth_enabled: false,
         auto_prestige_wealth_pct: 10,
         auto_buy_cheapest: false,
+        auto_buy_budget_enabled: false,
+        auto_buy_budget_pct: 100,
         threshold_master: false,
         threshold_all_skipped: THRESHOLD_ALL_SKIPPED_IDLE,
         threshold_perk_affordable_enabled: false,
@@ -3033,6 +3097,11 @@ export class Gamestate {
     // Prestige purchase queue (Game Mod): pending Divinity purchases, bought
     // strictly head-first whenever spark suffices. Survives prestige.
     prestige_buy_queue = [];
+    // Unlock Savings (auto_buy_budget_*): Spark spent on repeatables since the
+    // last unlockable purchase, from ANY buyer (auto-buy, queue, manual click)
+    // — all purchases funnel through increasePrestigeRepeatableLevel /
+    // addPrestigeUnlock. Persisted; missing in old saves = 0 via the default.
+    repeatable_spend_since_unlock = 0;
     // Spark stats (Game Mod): highest calcSparkPerReset() seen since the
     // last prestige. Feeds the display and the ratio auto-prestige trigger.
     peak_spark_per_reset = 0;
