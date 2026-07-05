@@ -22,7 +22,8 @@ export var EventType;
     EventType[EventType["UsedItems"] = 15] = "UsedItems";
     EventType[EventType["AwardedSparkOnDiscovery"] = 16] = "AwardedSparkOnDiscovery";
     EventType[EventType["ThresholdStall"] = 17] = "ThresholdStall";
-    EventType[EventType["Count"] = 18] = "Count";
+    EventType[EventType["AutoPrestiged"] = 18] = "AutoPrestiged";
+    EventType[EventType["Count"] = 19] = "Count";
 })(EventType || (EventType = {}));
 export class EventContext {
 }

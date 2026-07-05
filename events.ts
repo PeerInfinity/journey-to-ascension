@@ -22,6 +22,7 @@ export enum EventType {
     UsedItems,
     AwardedSparkOnDiscovery,
     ThresholdStall,
+    AutoPrestiged,
 
     Count
 }

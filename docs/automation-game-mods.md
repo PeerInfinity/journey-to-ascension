@@ -37,6 +37,7 @@ save from before a mod existed simply gets that mod off.
 | **Auto Magic Ring** | Spend held Magic Rings (5× XP for one rep) on the tasks where they help most, ranked from last run's completions. Tasks ranked within the Ring budget (held + already spent this run) each get one Ring; Rings found mid-run widen the budget. Needs one completed run of history; only while Auto Use Items is enabled. |
 | **Auto-Fill Priorities** | (Button, not a toggle.) Overwrite every reached zone's automation priorities using the Auto-Fill Order (default: item-awarding tasks, Combat, unearned perk tasks cheapest-first, Prestige tasks, task-unlockers, the rest by skill levels per energy, then Mandatory with Travel last). Earned perks sort as plain tasks; Bosses sort as Unlocks-a-Task until their unlock is done, then as Combat — never as item tasks. Re-click after unlocking or reaching new content. |
 | **Auto-Prioritize** | Autopilot for the above: re-runs Auto-Fill automatically at every Energy Reset and Prestige, on task unlock, and on zone entry, so the order always reflects current skills and energy. Overwrites manual edits while on. Mutually exclusive with **Queue Cycling**. |
+| **Auto-Prestige** | When a run ends and prestige is available, prestige instead of doing the energy reset if ANY enabled condition is met: spark/reset below X% of its peak since last prestige; prospective spark ≥ an absolute target; N consecutive resets without a new highest zone; or prospective spark ≥ X% of owned spark (with zero owned, any gain qualifies). Honors Resume on Reset so automation continues afterwards. |
 | **Auto-Fill Order** | Collapsible editor for the category order Auto-Fill/Auto-Prioritize use. Rearrange the eight categories (Items, Combat, New Perks, Prestige, Unlockers, Everything Else, Mandatory, Travel) with the arrows; reset restores the default. Reorders apply immediately while Auto-Prioritize is on. Classification is fixed (and perk/unlocker categories still track earned/unlocked state) — only the group order is configurable. |
 | **Energy Thresholds** | Skip prioritized tasks that aren't worth their energy — per-category energy-per-level thresholds; see below. |
 | **When All Skipped** | (Under Energy Thresholds) What happens when every remaining prioritized task is over its threshold: **Idle** (stop + notify), **End Run** (trigger the Energy Reset), or **Best Task** (run the skipped task that would earn the most total skill levels from the remaining energy). |
@@ -198,6 +199,11 @@ would never end. The **When All Skipped** control picks what:
   `getAutoFillOrder()` / `moveAutoFillCategory()` / `resetAutoFillOrder()`,
   also on `window`) in `simulation.ts`; UI in `setupAutoFillControl()` +
   `setupAutoFillOrderControl()` (`rendering.ts`).
+- **Auto-Prestige / spark stats:** `calcSparkPerReset()` (+ per-tick peak in
+  `updateGamestate()`), `shouldAutoPrestige()` / `maybeAutoPrestige()`
+  (called by rendering's run-end paths instead of `doEnergyReset()`),
+  `resets_since_highest_zone_gain`; UI in `setupAutoPrestigeControls()` +
+  `AUTO_PRESTIGE_ROWS`, display in the Divine Spark button refresh.
 - **Auto-Prioritize (autopilot):** `maybeAutoPrioritizeAll()` /
   `maybeAutoPrioritizeZone()`, hooked into `doEnergyReset()`, `doPrestige()`,
   `unlockTask()`, and `advanceZone()`; mutual exclusion with `queue_cycle` in

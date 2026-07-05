@@ -1,5 +1,5 @@
 import { Task, TaskDefinition, ZONES, TaskType, PERKS_BY_ZONE, ITEMS_BY_ZONE } from "./zones.js";
-import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, getBossEnergyDisparityLimit, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId, getQueueConfigs, getActiveQueueIndex, getQueueRunsOnCurrent, advanceQueueCycle, addQueue, removeQueue, setQueueAutoUseMode, getQueueExcludedItems, addQueueExcludedItem, removeQueueExcludedItem, setQueueRepeatCount, setQueueName, moveQueue, setActiveQueue, isEditMode, enterEditMode, exitEditMode, setEditZone, getEditMaxZone, autoFillAllPriorities, getAutoFillOrder, moveAutoFillCategory, resetAutoFillOrder, calcSparkPerReset, THRESHOLD_METRIC_REP, THRESHOLD_METRIC_RESETS, THRESHOLD_ALL_SKIPPED_IDLE } from "./simulation.js";
+import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, getBossEnergyDisparityLimit, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId, getQueueConfigs, getActiveQueueIndex, getQueueRunsOnCurrent, advanceQueueCycle, addQueue, removeQueue, setQueueAutoUseMode, getQueueExcludedItems, addQueueExcludedItem, removeQueueExcludedItem, setQueueRepeatCount, setQueueName, moveQueue, setActiveQueue, isEditMode, enterEditMode, exitEditMode, setEditZone, getEditMaxZone, autoFillAllPriorities, getAutoFillOrder, moveAutoFillCategory, resetAutoFillOrder, calcSparkPerReset, maybeAutoPrestige, THRESHOLD_METRIC_REP, THRESHOLD_METRIC_RESETS, THRESHOLD_ALL_SKIPPED_IDLE } from "./simulation.js";
 import { GAMESTATE, RENDERING, resetSave } from "./game.js";
 import { ItemType, ItemDefinition, ITEMS, HASTE_MULT, ARTIFACTS, MAGIC_RING_MULT, BOTTLED_LIGHTNING_MULT } from "./items.js";
 import { PerkDefinition, PerkType, PERKS, getPerkNameWithEmoji } from "./perks.js";
@@ -1085,6 +1085,9 @@ function populateEnergyReset(energy_reset_div) {
     const hasHadItemInheritance = hasPerk(PerkType.UnderstandingTheReset) || GAMESTATE.prestige_count > 0;
     function handleReset() {
         energy_reset_div.classList.add("hidden");
+        if (maybeAutoPrestige()) {
+            return; // prestiged instead of resetting
+        }
         doEnergyReset();
         if (shouldShowBossHint()) {
             showHint("You've gotten to Zone 10 now without beating any Bosses.<br>Consider that it might be time to beat one up");
@@ -1228,7 +1231,9 @@ function updateGameOver() {
     // restores energy, so this can't re-trigger on the same depletion.
     if (GAMESTATE.is_in_energy_reset && isModEnabled("auto_continue_energy_reset")) {
         RENDERING.energy_reset_element.classList.add("hidden");
-        doEnergyReset();
+        if (!maybeAutoPrestige()) {
+            doEnergyReset();
+        }
         return;
     }
     const showing_energy_reset = !RENDERING.energy_reset_element.classList.contains("hidden") && !RENDERING.viewing_last_reset;
@@ -1910,6 +1915,12 @@ function handleEvents() {
                     message_div.innerHTML = `Automation is idle: every remaining Task is over its Energy Threshold`;
                     break;
                 }
+            case EventType.AutoPrestiged:
+                {
+                    const spark_context = context;
+                    message_div.innerHTML = `Auto-Prestige! +${formatInt(spark_context.amount)} ${DIVINE_SPARK_TEXT}`;
+                    break;
+                }
             case EventType.NewHighestZone:
             case EventType.NewHighestZoneFullyCompleted:
                 {
@@ -2120,6 +2131,78 @@ function setupAdvancedAutomationControls(parent) {
     setupAutoUseCycleControl(content);
     setupQueueCycleControl(content);
     setupThresholdControls(content);
+    setupAutoPrestigeControls(content);
+}
+// Auto-Prestige (Game Mod): at the run-end moment, prestige instead of doing
+// the energy reset when ANY enabled condition is met. Master toggle plus one
+// row per condition (toggle + value), like the Energy Thresholds section.
+const AUTO_PRESTIGE_ROWS = [
+    {
+        label: "Spark/reset < % of peak",
+        tooltip: "Trigger when Spark-per-reset (see Show Spark per Reset in Settings) drops below this percentage of the peak it has reached since the last Prestige — the diminishing-returns detector. Needs at least one completed reset.",
+        enabled: "auto_prestige_ratio_enabled",
+        value: "auto_prestige_ratio_pct",
+        min: 1, max: 99,
+    },
+    {
+        label: "Expected Spark ≥",
+        tooltip: "Trigger once the Spark a Prestige would award reaches this value. Useful for 'prestige when I can afford a specific upgrade'; needs retuning as the game scales.",
+        enabled: "auto_prestige_target_enabled",
+        value: "auto_prestige_target",
+        min: 1, max: 1_000_000_000_000_000,
+    },
+    {
+        label: "No new Zone for N resets",
+        tooltip: "Trigger after this many consecutive Energy Resets without reaching a new highest Zone — the crispest plateau detector.",
+        enabled: "auto_prestige_stall_enabled",
+        value: "auto_prestige_stall_resets",
+        min: 1, max: 99,
+    },
+    {
+        label: "Gain ≥ % of owned Spark",
+        tooltip: "Trigger when the prospective Spark is at least this percentage of the Spark you already own. Self-scales for the whole game. With zero Spark owned, any gain qualifies — the first Prestige fires as soon as it's available.",
+        enabled: "auto_prestige_wealth_enabled",
+        value: "auto_prestige_wealth_pct",
+        min: 1, max: 1000,
+    },
+];
+function setupAutoPrestigeControls(content) {
+    const on = GAMESTATE.mods.auto_prestige;
+    const master = createChildElement(content, "button");
+    master.className = on ? "on" : "off";
+    master.textContent = `Auto-Prestige: ${on ? "On" : "Off"}`;
+    master.addEventListener("click", () => {
+        setMod("auto_prestige", !GAMESTATE.mods.auto_prestige);
+        setupControls(); // rebuild: shows/hides the condition rows
+    });
+    setupTooltip(master, () => `Auto-Prestige: ${GAMESTATE.mods.auto_prestige ? "On" : "Off"}`, () => "When a run ends and Prestige is available, Prestige instead of doing the Energy Reset if ANY enabled condition below is met. Honors Resume on Reset, so automation keeps going afterwards. Prestige still resets everything a manual Prestige would.");
+    if (!on) {
+        return;
+    }
+    for (const row of AUTO_PRESTIGE_ROWS) {
+        const row_div = createChildElement(content, "div");
+        row_div.className = "threshold-row";
+        const button = createChildElement(row_div, "button");
+        function refresh() {
+            button.className = isModEnabled(row.enabled) ? "on" : "off";
+            button.textContent = row.label;
+        }
+        refresh();
+        button.addEventListener("click", () => {
+            setMod(row.enabled, !isModEnabled(row.enabled));
+            refresh();
+        });
+        setupTooltip(button, () => `${row.label}: ${isModEnabled(row.enabled) ? "On" : "Off"}`, () => row.tooltip);
+        createNumericInput(row_div, {
+            min: row.min,
+            max: row.max,
+            initialValue: GAMESTATE.mods[row.value],
+            ariaLabel: row.label,
+            onChange: (value) => {
+                setMod(row.value, value);
+            },
+        });
+    }
 }
 // Auto Dreamcatcher (Game Mod): a toggle plus the trigger percentage. A
 // Dreamcatcher duplicates every Item type found this energy reset, so it's

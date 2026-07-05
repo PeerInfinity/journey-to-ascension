@@ -21,7 +21,8 @@ export declare enum EventType {
     UsedItems = 15,
     AwardedSparkOnDiscovery = 16,
     ThresholdStall = 17,
-    Count = 18
+    AutoPrestiged = 18,
+    Count = 19
 }
 export declare class EventContext {
 }

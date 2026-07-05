@@ -1112,6 +1112,7 @@ export function doEnergyReset() {
         GAMESTATE.automation_mode = saved_automation_mode;
     }
     GAMESTATE.energy_reset_count += 1;
+    GAMESTATE.resets_since_highest_zone_gain += 1;
     handleEnergyResetItemCounts();
 
     // Bank the ended run's completions under its context, then rank the new
@@ -2841,6 +2842,63 @@ export function calcDivineSparkGain() {
     return calcDivineSparkGainFromHighestZone(GAMESTATE.highest_zone)
 }
 
+// MARK: Auto-Prestige (Game Mod)
+
+// True when any enabled auto-prestige condition is met. Evaluated at the
+// run-end decision point (the energy-reset moment), where prestige replaces
+// the reset; all conditions require prestige to actually be available.
+export function shouldAutoPrestige(): boolean {
+    const mods = GAMESTATE.mods;
+    if (!mods.auto_prestige || !GAMESTATE.prestige_available) {
+        return false;
+    }
+    // Diminishing returns: spark-per-reset sagged below the configured
+    // fraction of its peak. Needs a completed reset so the ratio has moved.
+    if (mods.auto_prestige_ratio_enabled && GAMESTATE.energy_reset_count >= 1
+        && GAMESTATE.peak_spark_per_reset > 0
+        && calcSparkPerReset() < (mods.auto_prestige_ratio_pct / 100) * GAMESTATE.peak_spark_per_reset) {
+        return true;
+    }
+    // Prospective spark reached an absolute target.
+    if (mods.auto_prestige_target_enabled && calcDivineSparkGain() >= mods.auto_prestige_target) {
+        return true;
+    }
+    // Plateau: K consecutive resets without reaching a new highest zone.
+    if (mods.auto_prestige_stall_enabled
+        && GAMESTATE.resets_since_highest_zone_gain >= Math.max(1, Math.floor(mods.auto_prestige_stall_resets))) {
+        return true;
+    }
+    // Wealth-relative: the gain is a meaningful fraction of owned spark.
+    // With zero owned, any gain qualifies — the first prestige fires as
+    // soon as it's available.
+    if (mods.auto_prestige_wealth_enabled
+        && calcDivineSparkGain() >= (mods.auto_prestige_wealth_pct / 100) * Math.max(1, GAMESTATE.divine_spark)) {
+        return true;
+    }
+    return false;
+}
+
+// Called by the run-end paths INSTEAD of doEnergyReset when it returns true:
+// performs the prestige, keeps automation running afterwards when Resume on
+// Reset is on (doPrestige turns automation off like any reset does), and
+// surfaces a notification with the spark gained.
+export function maybeAutoPrestige(): boolean {
+    if (!shouldAutoPrestige()) {
+        return false;
+    }
+    const resume = GAMESTATE.mods.resume_automation_on_reset;
+    const saved_mode = GAMESTATE.automation_mode;
+    const gain = calcDivineSparkGain();
+    doPrestige();
+    if (resume) {
+        GAMESTATE.automation_mode = saved_mode;
+    }
+    const context = new AwardedSparkContext();
+    context.amount = gain;
+    GAMESTATE.queueRenderEvent(new RenderEvent(EventType.AutoPrestiged, context));
+    return true;
+}
+
 // Prospective spark from prestiging now, averaged over this prestige's runs
 // (energy resets so far plus the run in progress, so it's defined from run
 // one). The efficiency signal behind the spark stats display and the
@@ -3003,6 +3061,7 @@ export function doPrestige() {
     GAMESTATE.ring_plan = [];
     GAMESTATE.ring_plan_used = [];
     GAMESTATE.peak_spark_per_reset = 0;
+    GAMESTATE.resets_since_highest_zone_gain = 0;
 
     // Re-apply mods after the perk wipe so force_automation re-grants the
     // Amulet that gates automation and auto-use.
@@ -3240,6 +3299,18 @@ export interface GameMods {
     auto_ring: boolean;                  // spend Magic Rings on last run's best level-gain tasks
     auto_prioritize: boolean;            // regenerate all priorities each reset/prestige/unlock/zone entry
 
+    // Auto-Prestige — at the run-end moment, prestige instead of doing the
+    // energy reset when ANY enabled condition is met (see shouldAutoPrestige).
+    auto_prestige: boolean;                  // master switch
+    auto_prestige_ratio_enabled: boolean;    // spark/reset < pct of its peak since last prestige
+    auto_prestige_ratio_pct: number;
+    auto_prestige_target_enabled: boolean;   // prospective spark >= absolute target
+    auto_prestige_target: number;
+    auto_prestige_stall_enabled: boolean;    // K resets in a row without a new highest zone
+    auto_prestige_stall_resets: number;
+    auto_prestige_wealth_enabled: boolean;   // prospective spark >= pct of owned spark
+    auto_prestige_wealth_pct: number;
+
     // Energy Thresholds — skip prioritized tasks that fail the category's
     // configured judgment. Each category has an enable toggle (disabled =
     // exempt, its tasks always run), a metric (THRESHOLD_METRIC_LEVEL: % of
@@ -3303,6 +3374,15 @@ export function defaultMods(): GameMods {
         auto_dreamcatcher_pct: 25,
         auto_ring: false,
         auto_prioritize: false,
+        auto_prestige: false,
+        auto_prestige_ratio_enabled: false,
+        auto_prestige_ratio_pct: 50,
+        auto_prestige_target_enabled: false,
+        auto_prestige_target: 1000,
+        auto_prestige_stall_enabled: false,
+        auto_prestige_stall_resets: 3,
+        auto_prestige_wealth_enabled: false,
+        auto_prestige_wealth_pct: 10,
         threshold_master: false,
         threshold_all_skipped: THRESHOLD_ALL_SKIPPED_IDLE,
         threshold_perk_affordable_enabled: false,
@@ -3455,6 +3535,9 @@ export class Gamestate {
     // Spark stats (Game Mod): highest calcSparkPerReset() seen since the
     // last prestige. Feeds the display and the ratio auto-prestige trigger.
     peak_spark_per_reset = 0;
+    // Consecutive energy resets without reaching a new highest zone; the
+    // auto-prestige stall trigger. Zeroed on a new highest zone and prestige.
+    resets_since_highest_zone_gain = 0;
 
     current_zone: number = 0;
     highest_zone: number = 0;
@@ -3572,6 +3655,7 @@ function advanceZone() {
     if (GAMESTATE.current_zone >= GAMESTATE.highest_zone) {
         GAMESTATE.highest_zone = new_zone;
         GAMESTATE.highest_zone_ever = Math.max(GAMESTATE.highest_zone, GAMESTATE.highest_zone_ever);
+        GAMESTATE.resets_since_highest_zone_gain = 0; // progress! the stall trigger re-arms
         const context: HighestZoneContext = { zone: GAMESTATE.current_zone + 1 };
         const event = new RenderEvent(EventType.NewHighestZone, context);
         GAMESTATE.queueRenderEvent(event);
