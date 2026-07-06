@@ -209,6 +209,23 @@ is *empty*, automatically buy the cheapest affordable purchase in your
 unlocked layers, repeating while anything is affordable. A non-empty queue
 always takes precedence — explicit plans outrank the greedy default.
 
+**Unlock Savings** (toggle + percentage next to Auto-Buy Cheapest): refines
+Auto-Buy Cheapest while both are on. Unlockables are bought the moment
+they're affordable (cheapest first), and repeatables are *budgeted*:
+repeatable spending since the last unlockable purchase stays within the set
+percentage (default 100%) of the cheapest not-yet-owned unlockable's cost.
+Without the budget, cheap low-exponent repeatables soak up Divine Spark
+forever just below each big unlockable's price, postponing game-changers
+like Mastery of Time and See Beyond the Veil by hundreds of runs; 0% means
+"save strictly, buy no repeatables while an unlockable remains" (simulated
+to be *counterproductive* — repeatables are the engine that reaches deep
+zones) and very large values approach plain Auto-Buy Cheapest. Once every
+unlockable in your unlocked layers is owned, spending is unrestricted.
+Manual and queued purchases count toward the same budget window, and the
+purchase queue still outranks all auto-buying. In simulation the default
+100% budget finished the first 15 zones' tasks in ~15% fewer runs and
+roughly doubled long-run Spark income vs plain Auto-Buy Cheapest.
+
 ## Code map
 
 - **State / defaults:** `GameMods` interface and `defaultMods()` in
@@ -231,6 +248,12 @@ always takes precedence — explicit plans outrank the greedy default.
   `getPrestigeQueuePositions()` / `processPrestigeBuyQueue()` /
   `maybeAutoBuyCheapest()` (per-tick in `updateGamestate()`); UI in
   `populatePrestigeView()` (`prestige_queue_mode`, `.queue-badge`).
+- **Unlock Savings:** `autoBuyWithUnlockBudget()` (the budgeted branch of
+  `maybeAutoBuyCheapest()`), mods `auto_buy_budget_enabled` /
+  `auto_buy_budget_pct`; the persisted window counter
+  `repeatable_spend_since_unlock` increments in
+  `increasePrestigeRepeatableLevel()` and resets in `addPrestigeUnlock()`,
+  so every purchase path shares it.
 - **Auto-Prestige / spark stats:** `calcSparkPerReset()` (+ per-tick peak in
   `updateGamestate()`), `shouldAutoPrestige()` / `maybeAutoPrestige()`
   (called by rendering's run-end paths instead of `doEnergyReset()`),
