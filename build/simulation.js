@@ -3491,6 +3491,12 @@ window.setEnergy = (current, max) => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 window.setManagedMode = (enabled) => {
     _managed_mode = !!enabled;
+    // Layout hook: managed sessions run in a panel-sized iframe, not a
+    // full browser viewport — style.css scopes substrate-friendly
+    // overrides (e.g. the fixed 900px top bar) to html.managed-mode.
+    if (typeof document !== "undefined" && document.documentElement?.classList) {
+        document.documentElement.classList.toggle("managed-mode", _managed_mode);
+    }
     return _managed_mode;
 };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -3514,12 +3520,51 @@ window.setEnergyResetCallback = (fn) => {
 // got those on first traversal; this is for the substrate "re-entry"
 // case where the zone shows only exit-choice tasks.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+// Whether the currently loaded zone's tasks were pre-completed by the
+// host (loadZone options.completed) — such tasks must not earn the
+// "fully completed the zone" credit when the host loads the next zone.
+let _zone_loaded_pre_completed = false;
 window.loadZone = (zoneId, options = {}) => {
     if (zoneId < 0 || zoneId >= ZONES.length) {
         return { success: false, error: `Invalid zone ${zoneId} (have ${ZONES.length} zones)` };
     }
+    // Managed zone transitions must do the same bookkeeping advanceZone
+    // does — without it highest_zone stays 0 forever under the substrate
+    // host, which breaks Auto-Prioritize coverage (auto-fill plans zones
+    // 0..highest_zone), Reflections on the Journey, Divine Spark gain,
+    // and the Auto-Prestige stall trigger.
+    const prevZone = GAMESTATE.current_zone;
+    if (zoneId !== prevZone) {
+        // Leaving-zone credit, mirroring advanceZone — but only when the
+        // player actually played the old zone (not a host pre-completed
+        // re-entry).
+        if (!_zone_loaded_pre_completed
+            && prevZone > GAMESTATE.highest_zone_fully_completed
+            && GAMESTATE.tasks.length > 0
+            && GAMESTATE.tasks.every((task) => isTaskFullyCompleted(task))) {
+            GAMESTATE.highest_zone_fully_completed = prevZone;
+            GAMESTATE.highest_zone_fully_completed_ever = Math.max(GAMESTATE.highest_zone_fully_completed, GAMESTATE.highest_zone_fully_completed_ever);
+            const context = { zone: prevZone };
+            GAMESTATE.queueRenderEvent(new RenderEvent(EventType.NewHighestZoneFullyCompleted, context));
+        }
+        // Same automation-mode transitions advanceZone applies.
+        if (GAMESTATE.automation_mode == AutomationMode.Zone) {
+            GAMESTATE.automation_mode = AutomationMode.Off;
+        }
+        else if (GAMESTATE.automation_mode == AutomationMode.All && (zoneId + 1) >= GAMESTATE.automation_end) {
+            GAMESTATE.automation_mode = AutomationMode.Off;
+        }
+    }
     GAMESTATE.current_zone = zoneId;
+    if (zoneId > GAMESTATE.highest_zone) {
+        GAMESTATE.highest_zone = zoneId;
+        GAMESTATE.highest_zone_ever = Math.max(GAMESTATE.highest_zone, GAMESTATE.highest_zone_ever);
+        GAMESTATE.resets_since_highest_zone_gain = 0; // progress! the stall trigger re-arms
+        const context = { zone: zoneId };
+        GAMESTATE.queueRenderEvent(new RenderEvent(EventType.NewHighestZone, context));
+    }
     resetTasks();
+    _zone_loaded_pre_completed = !!options.completed;
     if (options.completed) {
         for (const task of GAMESTATE.tasks) {
             task.reps = task.task_definition.max_reps;
@@ -3527,6 +3572,11 @@ window.loadZone = (zoneId, options = {}) => {
         }
         updateEnabledTasks();
     }
+    // Auto-Prioritize: (re)plan the zone just entered with current
+    // skills — same hook advanceZone fires. Harmless for pre-completed
+    // re-entries (nothing runnable to prioritize).
+    maybeAutoPrioritizeZone(zoneId);
+    doMasteryOfTimeTaskCompletion();
     // resetTasks() creates fresh Task instances. The existing task DOM
     // has click handlers closed over the previous Task instances, so
     // we rebuild it here. RENDERING.createTasks() bails harmlessly if

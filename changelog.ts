@@ -9,7 +9,9 @@ export const CHANGELOG: ChangelogEntry[] = [
         version: "Fork 1.6",
         date: "2026-07-05",
         changes: "- Substrate (managed) sessions now save and load like standalone play, under their own separate save slot — progression, settings, and automation configuration survive page reloads without ever touching a standalone save on the same browser. Host-injected exit-choice tasks are excluded from saves (they're re-created by the host on region entry)<br>"
-        + "- Prestige now notifies the substrate host the same way an Energy Reset does, so the shared loop-mode energy pool stays in sync when Auto-Prestige (or a manual Prestige) ends a run"
+        + "- Prestige now notifies the substrate host the same way an Energy Reset does, so the shared loop-mode energy pool stays in sync when Auto-Prestige (or a manual Prestige) ends a run<br>"
+        + "- Host-driven zone transitions now do the same bookkeeping as normal zone travel: your highest Zone advances, Auto-Prioritize plans each newly entered Zone, fully-completed Zone credit is earned, and Mastery of Time applies — previously automation stopped working past the first Zone in substrate play<br>"
+        + "- The Energy bar spans the visible width in substrate sessions instead of a fixed 900px strip that hung off-screen in narrow panels"
     },
     {
         version: "Fork 1.5",

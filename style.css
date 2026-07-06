@@ -121,6 +121,18 @@ body {
     padding-top: 13px;
 }
 
+/* Managed (substrate) sessions run in a panel-sized iframe, usually
+   narrower than the sidebar + 900px main column: the fixed-width bar
+   would hang off-screen right and ignore horizontal scrolling. Pin it
+   across the iframe's full width instead — an always-visible energy
+   HUD. Standalone play is untouched (html.managed-mode is set only by
+   setManagedMode). */
+html.managed-mode #top-area {
+    left: 0;
+    right: 0;
+    width: auto;
+}
+
 button {
     border-radius: var(--default-border-radius);
     background: var(--element-foreground-color);
