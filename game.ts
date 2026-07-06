@@ -20,11 +20,12 @@ let GAME_LOOP_INTERVAL = 0;
 
 // When loaded inside a substrate-controlled iframe (the wrapper appends
 // ?managed=1 to the iframe src), flip on managed mode synchronously —
-// before DOMContentLoaded fires — so GAMESTATE.start() skips loadGame
-// and the tick loop never starts. Without this, the auto-bootstrap
-// builds task DOM whose click handlers close over Task instances that
-// the bridge later orphans by replacing GAMESTATE, producing the
-// "first-load clicks register no completion until the next reset" bug.
+// before DOMContentLoaded fires — so GAMESTATE.start() loads from the
+// substrate save slot (see getSaveLocation) and the tick loop never
+// starts. Without this, the auto-bootstrap builds task DOM whose click
+// handlers close over Task instances that the bridge later orphans by
+// replacing GAMESTATE, producing the "first-load clicks register no
+// completion until the next reset" bug.
 if (typeof window !== "undefined" && typeof window.location !== "undefined") {
     const _params = new URLSearchParams(window.location.search);
     if (_params.has("managed")) {

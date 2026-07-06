@@ -6,6 +6,12 @@ export class ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
+        version: "Fork 1.6",
+        date: "2026-07-05",
+        changes: "- Substrate (managed) sessions now save and load like standalone play, under their own separate save slot — progression, settings, and automation configuration survive page reloads without ever touching a standalone save on the same browser. Host-injected exit-choice tasks are excluded from saves (they're re-created by the host on region entry)<br>"
+        + "- Prestige now notifies the substrate host the same way an Energy Reset does, so the shared loop-mode energy pool stays in sync when Auto-Prestige (or a manual Prestige) ends a run"
+    },
+    {
         version: "Fork 1.5",
         date: "2026-07-05",
         changes: "- Added Unlock Savings (Divinity popup, next to Auto-Buy Cheapest): while enabled, Auto-Buy Cheapest buys unlockables the moment they're affordable (cheapest first) and budgets repeatable purchases — repeatable spending since the last unlockable purchase stays within a set percentage (default 100%) of the cheapest not-yet-owned unlockable's cost, so cheap repeatables can't soak up Divine Spark forever just below a big unlockable's price. Once every unlockable in your unlocked layers is owned, spending is unrestricted. Manual and queued purchases count toward the same budget window, and the explicit purchase queue still outranks all auto-buying<br>"

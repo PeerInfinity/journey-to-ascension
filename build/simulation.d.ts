@@ -5,7 +5,7 @@ import { RenderEvent } from "./events.js";
 import { SkillType } from "./skills.js";
 import { PrestigeRepeatableType, PrestigeUnlockType, PrestigeLayer } from "./prestige_upgrades.js";
 export declare function isManagedMode(): boolean;
-export declare const SAVE_VERSION = "Fork 1.5";
+export declare const SAVE_VERSION = "Fork 1.6";
 export declare class Skill {
     type: SkillType;
     level: number;
@@ -162,6 +162,7 @@ export declare function increasePrestigeRepeatableLevel(repeatable: PrestigeRepe
 export declare function doPrestige(): void;
 export declare function calcPerkySpeedMultiplier(): number;
 export declare const SAVE_LOCATION = "incrementalGameSave";
+export declare function getSaveLocation(): string;
 export declare function saveGame(): void;
 export interface GameMods {
     award_spark_on_discovery: boolean;

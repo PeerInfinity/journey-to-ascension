@@ -22,7 +22,9 @@ let instant_mode = false;
 let _managed_mode = false;
 // Fires when a TaskType.Travel task is fully completed.
 let _travel_task_callback: ((zone: number, task: { id: number, name: string }) => void) | null = null;
-// Fires when doEnergyReset() finishes.
+// Fires when doEnergyReset() or doPrestige() finishes — any game-initiated
+// run end the substrate host must observe. After a prestige,
+// energyResetCount is 0 (doPrestige resets it).
 let _energy_reset_callback: ((state: { currentEnergy: number, maxEnergy: number, energyResetCount: number }) => void) | null = null;
 // Synthetic-task injection: per-task callbacks fired when the synthetic
 // task is fully completed. Keyed by task id (use ids well above the
@@ -41,7 +43,7 @@ const DEFAULT_TICK_RATE = 66.6;
 // upstream's save version. The Changelog popup checks SAVE_VERSION against the
 // newest CHANGELOG entry, so keep this equal to CHANGELOG[0].version — bump both
 // together when adding a fork changelog entry.
-export const SAVE_VERSION = "Fork 1.5";
+export const SAVE_VERSION = "Fork 1.6";
 const TASK_STARTED_PROGRESS = 0.01;
 
 // Player-scheduled "use this artifact here" tasks get ids in this range — well
@@ -3279,6 +3281,17 @@ export function doPrestige() {
     storeLoopStartNumbersForNextGameOver();
     setTickRate();
     saveGame();
+
+    // Notify the host, same as doEnergyReset — a prestige is also a
+    // game-initiated run end (zone 0, energy refilled) that the substrate
+    // bridge must observe to keep the shared loop-mode pool in sync.
+    if (_energy_reset_callback) {
+        _energy_reset_callback({
+            currentEnergy: GAMESTATE.current_energy,
+            maxEnergy: GAMESTATE.max_energy,
+            energyResetCount: GAMESTATE.energy_reset_count,
+        });
+    }
 }
 
 export function calcPerkySpeedMultiplier() {
@@ -3297,12 +3310,15 @@ export function calcPerkySpeedMultiplier() {
 
 export const SAVE_LOCATION = "incrementalGameSave";
 
-export function saveGame() {
-    // In managed mode the host owns persistence — skip writing to
-    // localStorage entirely. Covers all internal call sites (updateActiveTask,
-    // doEnergyReset, resetSave, etc.) without per-site guards.
-    if (_managed_mode) return;
+// Managed (substrate) sessions persist under their own key so they never
+// touch a standalone save on the same origin. One shared substrate slot
+// across all presets/worlds — the game content is identical across presets;
+// only the host-owned region topology differs.
+export function getSaveLocation(): string {
+    return _managed_mode ? SAVE_LOCATION + "_substrate" : SAVE_LOCATION;
+}
 
+export function saveGame() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const saveData: any = {};
 
@@ -3323,10 +3339,12 @@ export function saveGame() {
             if (value instanceof Map) {
                 saveData[key] = Array.from(value.entries());
             } else if (key == "tasks") {
-                // Artifact tasks are rebuilt from artifact_tasks on load; their
-                // ids aren't in TASK_LOOKUP, so excluding them avoids the
-                // task_definition reviver yielding undefined.
-                saveData[key] = (value as Task[]).filter(t => !isArtifactTaskId(t.task_definition.id));
+                // Synthetic tasks aren't real zone tasks: artifact tasks are
+                // rebuilt from artifact_tasks on load, and host-injected exit
+                // tasks are re-injected by the substrate bridge. Neither id is
+                // in TASK_LOOKUP, so excluding both avoids the task_definition
+                // reviver yielding undefined.
+                saveData[key] = (value as Task[]).filter(t => !isSyntheticTask(t));
             } else {
                 saveData[key] = value;
             }
@@ -3341,7 +3359,7 @@ export function saveGame() {
         return value;
     });
 
-    localStorage.setItem(SAVE_LOCATION, json);
+    localStorage.setItem(getSaveLocation(), json);
 }
 
 function parseSave(save: string): unknown {
@@ -3356,7 +3374,7 @@ function parseSave(save: string): unknown {
 }
 
 function loadGame(): boolean {
-    const saved_game = localStorage.getItem(SAVE_LOCATION);
+    const saved_game = localStorage.getItem(getSaveLocation());
     if (!saved_game) {
         return false;
     }
@@ -3819,9 +3837,10 @@ export class Gamestate {
     queue_list_collapsed = false;            // Queue Cycle list UI state
 
     public start() {
-        // In managed mode the host owns persistence — skip reading from
-        // localStorage and go straight to a fresh initialize.
-        if (_managed_mode || !loadGame()) {
+        // Managed sessions load from their own substrate save slot (see
+        // getSaveLocation); a missing slot falls through to a fresh
+        // initialize, same as standalone.
+        if (!loadGame()) {
             this.initialize();
         }
     }
