@@ -2623,6 +2623,20 @@ export function autoFillPriorities(zone_id: number) {
         return;
     }
 
+    // Preserve player-prioritized entries the rebuild can't know about:
+    // ids that aren't in the zone definition (host-injected exit-choice
+    // tasks, scheduled artifact tasks). Matched by "not a zone task"
+    // rather than by live-task lookup, because the regen can fire while
+    // the injected task doesn't currently exist (e.g. the zone-entry
+    // hook on a fresh re-entry, before the host re-injects exit tasks) —
+    // the automation queue skips ids with no live task, so a parked
+    // entry is harmless until its task reappears.
+    const zone_task_ids = new Set(zone.tasks.map((def) => def.id));
+    const old_prios = GAMESTATE.automation_prios.get(zone_id) ?? [];
+    const preserved = old_prios
+        .map((id, index) => ({ id, index }))
+        .filter(({ id }) => !zone_task_ids.has(id));
+
     const order = getAutoFillOrder();
     const entries: { id: number; group: number; metric: number }[] = [];
     for (const def of zone.tasks) {
@@ -2653,7 +2667,14 @@ export function autoFillPriorities(zone_id: number) {
     }
 
     entries.sort((a, b) => a.group - b.group || a.metric - b.metric || a.id - b.id);
-    GAMESTATE.automation_prios.set(zone_id, entries.map((e) => e.id));
+    const ids = entries.map((e) => e.id);
+    // Re-insert preserved foreign entries at (approximately) their old
+    // positions, in ascending order so earlier inserts keep later
+    // indices meaningful.
+    for (const { id, index } of preserved) {
+        ids.splice(Math.min(index, ids.length), 0, id);
+    }
+    GAMESTATE.automation_prios.set(zone_id, ids);
 }
 
 export function autoFillAllPriorities() {
