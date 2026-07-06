@@ -3361,6 +3361,10 @@ window.getFullState = () => {
             enabled: t.enabled,
             completed: t.reps >= t.task_definition.max_reps
         })),
+        // Active task (null when idle) — substrate bot drivers use this
+        // to avoid re-issuing performTask (which re-applies rep-start
+        // effects) while a task is already being worked.
+        activeTaskId: GAMESTATE.active_task?.task_definition.id ?? null,
         // Extra stats
         power: GAMESTATE.power,
         attunement: GAMESTATE.attunement,
