@@ -4092,6 +4092,27 @@ export function updateGamestate() {
 (window as any).getQueueConfigs = () => ({ active: getActiveQueueIndex(), configs: getQueueConfigs() });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).autoFillPriorities = () => { autoFillAllPriorities(); RENDERING.createTasks(); return { success: true }; };
+// Substrate playback hooks: the host bot drives the automation engine
+// directly for the loaded zone, bypassing the Amulet gate — the gate is
+// player progression; the bot is a driver, not the player. automation_mode
+// is deliberately not persisted, so these are session-transient.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).getAutomationMode = () => GAMESTATE.automation_mode;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).setAutomationMode = (mode: AutomationMode) => {
+    setAutomationMode(mode);
+    return GAMESTATE.automation_mode;
+};
+// Fill the zone's automation priorities only when the player has none
+// configured there (their own priorities/thresholds stay untouched).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).ensureZoneAutomationPriorities = (zone?: number) => {
+    const z = typeof zone === "number" ? zone : GAMESTATE.current_zone;
+    if (!GAMESTATE.automation_prios.get(z)?.length) {
+        autoFillPriorities(z);
+    }
+    return GAMESTATE.automation_prios.get(z) ?? [];
+};
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).getPrestigeBuyQueue = () => GAMESTATE.prestige_buy_queue;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
