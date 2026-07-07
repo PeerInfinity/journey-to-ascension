@@ -6,6 +6,11 @@ export class ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
+        version: "Fork 1.6.1",
+        date: "2026-07-06",
+        changes: "- Auto-Prestige zone-stall trigger default 40 → 20 resets. The Fork 1.5 tuning (20 → 40) was measured with Award Spark on Discovery enabled, which isn't the game's default; with it off, prestiging is the only source of Divine Spark and waiting 40 stalled resets starves the Divinity economy — full-game simulations finish every task in ~20% fewer runs at stall 20, while spark-on play is barely affected. Existing saves keep whatever value they have configured"
+    },
+    {
         version: "Fork 1.6",
         date: "2026-07-05",
         changes: "- Substrate (managed) sessions now save and load like standalone play, under their own separate save slot — progression, settings, and automation configuration survive page reloads without ever touching a standalone save on the same browser. Host-injected exit-choice tasks are excluded from saves (they're re-created by the host on region entry)<br>"

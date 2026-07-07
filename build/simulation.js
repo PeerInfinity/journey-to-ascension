@@ -2981,7 +2981,7 @@ export function defaultMods() {
         auto_prestige_target_enabled: false,
         auto_prestige_target: 1000,
         auto_prestige_stall_enabled: false,
-        auto_prestige_stall_resets: 40,
+        auto_prestige_stall_resets: 20,
         auto_prestige_wealth_enabled: false,
         auto_prestige_wealth_pct: 10,
         auto_buy_cheapest: false,
