@@ -821,6 +821,12 @@ function modifyEnergy(delta) {
 }
 function modifyMaxEnergy(delta) {
     GAMESTATE.max_energy += delta;
+    // Mirror the delta into the starting-energy-bonus accumulator (fork
+    // substrate hook). Every current caller is a JtA starting-energy bonus
+    // (Energetic Memory, EnergySpell perk, Energized repeatable); the one
+    // other bonus (Divine Supremacy) writes max_energy directly and mirrors
+    // there. See the jta_starting_energy_bonus field comment.
+    GAMESTATE.jta_starting_energy_bonus += delta;
     setTickRate();
 }
 export function calcReflectionsOnTheJourneyMult(zone) {
@@ -2659,6 +2665,9 @@ function applyPrestigeUnlockEffects(unlock, show_notification) {
     }
     else if (unlock == PrestigeUnlockType.DivineSupremacy) {
         GAMESTATE.max_energy += DIVINE_SUPREMACY_ENERGY;
+        // Mirror into the starting-energy-bonus accumulator (fork hook);
+        // this bonus writes max_energy directly, bypassing modifyMaxEnergy.
+        GAMESTATE.jta_starting_energy_bonus += DIVINE_SUPREMACY_ENERGY;
     }
 }
 export function addPrestigeUnlock(unlock) {
@@ -2745,6 +2754,10 @@ export function doPrestige() {
     GAMESTATE.auto_use_cycle_counter = 0;
     GAMESTATE.max_energy = STARTING_ENERGY;
     GAMESTATE.current_energy = STARTING_ENERGY;
+    // Reset the starting-energy-bonus accumulator alongside max_energy (fork
+    // hook). applyGameStartPrestigeEffects re-applies the persistent bonuses
+    // (Divine Supremacy, Energized) right after, re-accumulating them.
+    GAMESTATE.jta_starting_energy_bonus = 0;
     GAMESTATE.power = 0;
     GAMESTATE.attunement = 0;
     GAMESTATE.prestige_available = false;
@@ -3176,6 +3189,14 @@ export class Gamestate {
     is_in_zone_skip = false;
     current_energy = STARTING_ENERGY;
     max_energy = STARTING_ENERGY;
+    // Substrate hook (fork addition): accumulates ONLY the increases to
+    // starting/max energy that come from JtA's own starting-energy bonuses
+    // (Energetic Memory, the EnergySpell perk, Divine Supremacy, Energized).
+    // It parallels every bonus write to max_energy but is NOT touched by the
+    // host energy pin (setEnergy) — so it reports JtA's native starting-energy
+    // bonus to the shared loop-mana pool independent of whatever max_energy is
+    // pinned to. Resets to 0 wherever max_energy resets to STARTING_ENERGY.
+    jta_starting_energy_bonus = 0;
     energy_reset_count = 0;
     auto_use_cycle_counter = 0; // position within the auto-use cycle (Game Mod)
     power = 0;
@@ -3351,6 +3372,7 @@ window.getFullState = () => {
         // Energy
         currentEnergy: GAMESTATE.current_energy,
         maxEnergy: GAMESTATE.max_energy,
+        jtaStartingEnergyBonus: GAMESTATE.jta_starting_energy_bonus,
         isInEnergyReset: GAMESTATE.is_in_energy_reset,
         energyResetCount: GAMESTATE.energy_reset_count,
         // Zone

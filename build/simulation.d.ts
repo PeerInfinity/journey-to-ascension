@@ -290,6 +290,7 @@ export declare class Gamestate {
     is_in_zone_skip: boolean;
     current_energy: number;
     max_energy: number;
+    jta_starting_energy_bonus: number;
     energy_reset_count: number;
     auto_use_cycle_counter: number;
     power: number;
