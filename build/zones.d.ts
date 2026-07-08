@@ -45,4 +45,5 @@ export declare const ZONES: Zone[];
 export declare const TASK_LOOKUP: Map<number, TaskDefinition>;
 export declare const PERKS_BY_ZONE: PerkType[];
 export declare const ITEMS_BY_ZONE: ItemType[];
+export declare function rebuildZoneDerivedMaps(): void;
 //# sourceMappingURL=zones.d.ts.map

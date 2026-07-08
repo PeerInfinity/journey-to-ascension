@@ -489,14 +489,29 @@ export const TASK_LOOKUP: Map<number, TaskDefinition> = new Map();
 export const PERKS_BY_ZONE: PerkType[] = [];
 export const ITEMS_BY_ZONE: ItemType[] = [];
 
-ZONES.forEach((zone) => {
-    for (const task of zone.tasks) {
-        TASK_LOOKUP.set(task.id, task);
-        if (task.perk != PerkType.Count && !PERKS_BY_ZONE.includes(task.perk)) {
-            PERKS_BY_ZONE.push(task.perk);
+// Rebuild the derived perk/item value-lists from the current task defs.
+// TASK_LOOKUP holds references to the TaskDefinition objects, so
+// field-level mutation (cost/xp/max_reps) stays coherent without a
+// rebuild; PERKS_BY_ZONE/ITEMS_BY_ZONE are copied *values*, so a host
+// patch that changes a task's perk/item must call this to keep the
+// perks/items reference panels (rendering.ts, the only consumers) in
+// sync. TASK_LOOKUP is refreshed too for completeness (ids never change
+// under field-level patches, but a rebuild is cheap and future-proof).
+export function rebuildZoneDerivedMaps(): void {
+    TASK_LOOKUP.clear();
+    PERKS_BY_ZONE.length = 0;
+    ITEMS_BY_ZONE.length = 0;
+    ZONES.forEach((zone) => {
+        for (const task of zone.tasks) {
+            TASK_LOOKUP.set(task.id, task);
+            if (task.perk != PerkType.Count && !PERKS_BY_ZONE.includes(task.perk)) {
+                PERKS_BY_ZONE.push(task.perk);
+            }
+            if (task.item != ItemType.Count && !ITEMS_BY_ZONE.includes(task.item)) {
+                ITEMS_BY_ZONE.push(task.item);
+            }
         }
-        if (task.item != ItemType.Count && !ITEMS_BY_ZONE.includes(task.item)) {
-            ITEMS_BY_ZONE.push(task.item);
-        }
-    }
-});
+    });
+}
+
+rebuildZoneDerivedMaps();

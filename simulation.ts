@@ -1,4 +1,4 @@
-import { Task, ZONES, TaskType, TASK_LOOKUP, TaskDefinition } from "./zones.js";
+import { Task, ZONES, TaskType, TASK_LOOKUP, TaskDefinition, rebuildZoneDerivedMaps } from "./zones.js";
 import { GAMESTATE, RENDERING, setTickRate } from "./game.js";
 import { HASTE_MULT, ItemDefinition, ITEMS, ARTIFACTS, ItemType, MAGIC_RING_MULT, BOTTLED_LIGHTNING_MULT, NOTE_ITEMS } from "./items.js";
 import { getReflectionsOnTheJourneyExponent, PerkDefinition, PERKS, PerkType } from "./perks.js";
@@ -31,6 +31,19 @@ let _energy_reset_callback: ((state: { currentEnergy: number, maxEnergy: number,
 // normal task-id range to avoid collisions — exit-choice tasks use
 // ids in the 10000+ range by convention).
 const _synthetic_task_callbacks = new Map<number, () => void>();
+// Fires every time ANY task is fully completed (reps == max_reps), once
+// per task. Unlike the travel/synthetic callbacks above, this is the
+// general channel the Archipelago substrate host uses for
+// all-tasks-as-locations: the host maps each completed real zone task to
+// an AP location check. The payload carries `synthetic` (true for
+// injected/artifact tasks that are not real zone tasks) so the host can
+// filter. Pass null to clear. First full completion is the only signal —
+// tasks stay done once at max_reps — so the host dedupes on its side.
+let _task_completion_callback: ((info: {
+    id: number, name: string, zone: number, type: TaskType,
+    perk: PerkType, item: ItemType, reps: number, maxReps: number,
+    synthetic: boolean,
+}) => void) | null = null;
 
 export function isManagedMode(): boolean {
     return _managed_mode;
@@ -712,6 +725,22 @@ function onFullyFinishTask(task: Task) {
             context.amount = amount;
             GAMESTATE.queueRenderEvent(new RenderEvent(EventType.AwardedSparkOnDiscovery, context));
         }
+    }
+
+    // General task-completion channel (Archipelago substrate host):
+    // fired last, once the task's own finish effects have settled, for
+    // EVERY fully-completed task. The host maps real zone tasks to AP
+    // location checks; injected/artifact tasks are flagged synthetic so
+    // the host can skip them (they have their own one-shot callbacks
+    // above). Dormant in standalone play (callback null).
+    if (_task_completion_callback) {
+        const def = task.task_definition;
+        _task_completion_callback({
+            id: def.id, name: def.name, zone: def.zone_id, type: def.type,
+            perk: def.perk, item: def.item,
+            reps: task.reps, maxReps: def.max_reps,
+            synthetic: isSyntheticTask(task),
+        });
     }
 }
 
@@ -4365,4 +4394,118 @@ let _zone_loaded_pre_completed = false;
     GAMESTATE.tasks = GAMESTATE.tasks.filter(t => !_synthetic_task_callbacks.has(t.task_definition.id));
     _synthetic_task_callbacks.clear();
     return { removed };
+};
+
+// MARK: Archipelago substrate Tier-1 data/grant hooks
+//
+// Additive, save-neutral (SAVE_VERSION untouched) runtime hooks the AP
+// zone-randomization arc uses. All dormant in standalone play — the
+// standalone game never calls them.
+
+// Register the general task-completion callback (see
+// _task_completion_callback). Pass null to clear.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).setTaskCompletionCallback = (fn: typeof _task_completion_callback) => {
+    _task_completion_callback = fn;
+};
+
+// Grant a perk from outside a task completion — the path an AP-delivered
+// perk item takes when local grants are suppressed (by patching the
+// granting task's `perk` field to PerkType.Count via applyTaskPatches).
+// Accepts a PerkType number or a perk display name (matched against
+// PERKS[].name). Persistence-safe: the perk lands in GAMESTATE.perks,
+// which the save blob serializes, so an AP-granted perk survives
+// save/load even though its task was never completed. Idempotent — a
+// perk already held is a no-op. Returns {success, perk?, alreadyHad?,
+// error?}.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).grantPerk = (perk: PerkType | string) => {
+    let type: PerkType | undefined;
+    if (typeof perk === 'number') {
+        type = perk;
+    } else if (typeof perk === 'string') {
+        const match = PERKS.find((p) => p.name === perk);
+        type = match?.enum;
+    }
+    if (type === undefined || type === PerkType.Count
+            || type < 0 || type >= PerkType.Count) {
+        return { success: false, error: `Unknown perk: ${JSON.stringify(perk)}` };
+    }
+    if (hasPerk(type)) {
+        return { success: true, perk: type, alreadyHad: true };
+    }
+    tryAddPerk(type);
+    return { success: true, perk: type, alreadyHad: false };
+};
+
+// Field-level patch of existing zone task definitions, by task id. The
+// Tier-1 delivery mechanism for the randomizer/balancer: cost/xp/max_reps
+// costing patches and perk/item re-assignment ride each region's sidecar
+// payload and get applied here at load time. Idempotent (sets fields to
+// values) and NOT part of the save blob — the host re-applies on every
+// load. Mutates the static TaskDefinition objects in place, which every
+// live Task references via task_definition, so effects are immediate.
+//
+// Supported fields (unknown keys are ignored, unknown ids skipped and
+// reported): cost_multiplier, xp_mult, max_reps, hidden_by_default,
+// unlocks_task, perk, item. Perk/item accept a number (enum) or a
+// display name. When any patch touches perk/item, the derived
+// perk/item reference lists are rebuilt so the reference panels stay
+// coherent.
+//
+// `patches` is either an array of `{ id, ...fields }` or a map
+// `{ [id]: { ...fields } }`. Returns { applied, skipped }.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).applyTaskPatches = (patches: any) => {
+    const list: Array<{ id: number, fields: any }> = [];
+    if (Array.isArray(patches)) {
+        for (const p of patches) {
+            if (p && typeof p.id === 'number') {
+                const { id, ...fields } = p;
+                list.push({ id, fields });
+            }
+        }
+    } else if (patches && typeof patches === 'object') {
+        for (const [key, fields] of Object.entries(patches)) {
+            list.push({ id: Number(key), fields });
+        }
+    }
+
+    const resolvePerk = (v: unknown): PerkType | undefined => {
+        if (typeof v === 'number') return v;
+        if (typeof v === 'string') return PERKS.find((p) => p.name === v)?.enum;
+        return undefined;
+    };
+    const resolveItem = (v: unknown): ItemType | undefined => {
+        if (typeof v === 'number') return v;
+        if (typeof v === 'string') return ITEMS.find((i) => i.name === v)?.enum;
+        return undefined;
+    };
+
+    const applied: number[] = [];
+    const skipped: number[] = [];
+    let touchedPerkOrItem = false;
+    for (const { id, fields } of list) {
+        const def = TASK_LOOKUP.get(id);
+        if (!def || !fields || typeof fields !== 'object') {
+            skipped.push(id);
+            continue;
+        }
+        if (typeof fields.cost_multiplier === 'number') def.cost_multiplier = fields.cost_multiplier;
+        if (typeof fields.xp_mult === 'number') def.xp_mult = fields.xp_mult;
+        if (typeof fields.max_reps === 'number') def.max_reps = fields.max_reps;
+        if (typeof fields.hidden_by_default === 'boolean') def.hidden_by_default = fields.hidden_by_default;
+        if (typeof fields.unlocks_task === 'number') def.unlocks_task = fields.unlocks_task;
+        if ('perk' in fields) {
+            const pk = resolvePerk(fields.perk);
+            if (pk !== undefined) { def.perk = pk; touchedPerkOrItem = true; }
+        }
+        if ('item' in fields) {
+            const it = resolveItem(fields.item);
+            if (it !== undefined) { def.item = it; touchedPerkOrItem = true; }
+        }
+        applied.push(id);
+    }
+    if (touchedPerkOrItem) rebuildZoneDerivedMaps();
+    return { applied, skipped };
 };
