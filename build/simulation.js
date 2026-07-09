@@ -1591,11 +1591,21 @@ function skipCurrentZoneIfFree() {
     })) {
         return false;
     }
+    const zone_before = GAMESTATE.current_zone;
     // In reverse so travel happens last
     for (const task of GAMESTATE.tasks.slice().reverse()) {
         doAllTaskRepsForFree(task);
     }
-    return true;
+    // "Skipped" means we actually left the zone. Standalone, the Travel task's
+    // onFullyFinishTask calls advanceZone() and swaps GAMESTATE.tasks, so this
+    // is true whenever the zone was free. In MANAGED mode the host owns zone
+    // transitions and advanceZone() is deliberately not called, so the task
+    // array never changes — returning true unconditionally made skipFreeZones'
+    // `while` loop re-skip the same finished zone forever, hanging the game
+    // inside doEnergyReset. The zone's tasks are still completed for free above
+    // (items awarded, perks granted, host callbacks fired); we just stop here
+    // and let the host move the player.
+    return GAMESTATE.current_zone !== zone_before;
 }
 function skipFreeZones() {
     if (!hasPerk(PerkType.MinorTimeCompression)) {
