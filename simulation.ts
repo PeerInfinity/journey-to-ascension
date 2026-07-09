@@ -44,6 +44,27 @@ let _task_completion_callback: ((info: {
     perk: PerkType, item: ItemType, reps: number, maxReps: number,
     synthetic: boolean,
 }) => void) | null = null;
+// Cost-assignment allowlist (Pass-B balance walk). When non-null, any real
+// (non-synthetic) task whose id is NOT in the set is treated as
+// disabled-without-being-finished, so automation skips past it (the walk runs
+// `automation_skip_blocked`). null (default) = inert; standalone play never
+// sets it. Stored as a Set for O(1) lookup — it is consulted per task per tick
+// via updateEnabledTasks.
+let _costed_task_ids: Set<number> | null = null;
+// First-start cost callback (Pass-B balance walk). Fired SYNCHRONOUSLY the
+// moment a real task begins the first rep of its current run (reps == 0 &&
+// progress == 0), BEFORE any cost/progress is evaluated. The callback may
+// synchronously call applyTaskPatches to set this task's cost_multiplier and
+// the starting tick — normal OR instant mode — reads the patched cost (see
+// applyTaskRepStartEffects). Fires on every fresh start (reps reset each run);
+// the host dedupes. null (default) = inert.
+let _task_first_start_callback: ((info: {
+    id: number, name: string, zone: number, type: TaskType,
+    reps: number, progress: number,
+}) => void) | null = null;
+// Reentrancy guard for _task_first_start_callback: the callback mutates task
+// definitions (applyTaskPatches) but must never re-enter the first-start seam.
+let _in_first_start_callback = false;
 
 export function isManagedMode(): boolean {
     return _managed_mode;
@@ -622,6 +643,32 @@ function maybeAutoUseDreamcatcher(task: Task) {
 
 // Note that free executions don't call this
 export function applyTaskRepStartEffects(task: Task) {
+    // Pass-B first-start cost hook. This function is the single rep-start seam
+    // reached before a task's cost is read in BOTH tick modes: updateActiveTask
+    // calls it for a freshly-picked task (progress == 0) BEFORE the instant
+    // branch (completeTaskInstantly, which reads calcTaskCost) AND before the
+    // normal progressTask call (which reads calcTaskCost). Firing here — while
+    // reps == 0 && progress == 0, before the TASK_STARTED_PROGRESS bump below —
+    // lets the callback synchronously applyTaskPatches this task's
+    // cost_multiplier and have the very tick that starts it observe the patched
+    // cost. Synthetic tasks are host-owned/never-costed and never fire. The
+    // reentrancy guard keeps the callback's applyTaskPatches from re-entering.
+    if (_task_first_start_callback !== null
+            && !_in_first_start_callback
+            && task.reps == 0 && task.progress == 0
+            && !isSyntheticTask(task)) {
+        _in_first_start_callback = true;
+        try {
+            const def = task.task_definition;
+            _task_first_start_callback({
+                id: def.id, name: def.name, zone: def.zone_id, type: def.type,
+                reps: task.reps, progress: task.progress,
+            });
+        } finally {
+            _in_first_start_callback = false;
+        }
+    }
+
     // Artifact effects (auto-/queued Scroll of Haste, Magic Ring, Bottled
     // Lightning) shouldn't be spent on synthetic tasks: artifact tasks and host
     // exit tasks are instant and skill-less, so applying them just wastes the
@@ -835,12 +882,29 @@ export function isTaskDisabledDueToMissingItem(task: Task) {
     return item_count <= 0;
 }
 
+// Pass-B cost-assignment allowlist: while the balance walk is active, a real
+// task with no cost assigned yet is UNCOSTED — not runnable by automation, and
+// not eligible for the free-completion paths (free-zone skip, Mastery of
+// Time), which bypass applyTaskRepStartEffects and so would complete the task
+// without its first-start cost hook ever firing. Synthetic tasks (host exit /
+// artifact tasks) are host-owned, never costed, and exempt. Always false when
+// the allowlist is unset (standalone play).
+function isTaskUncosted(task: Task): boolean {
+    return _costed_task_ids !== null
+        && !_costed_task_ids.has(task.task_definition.id)
+        && !isSyntheticTask(task);
+}
+
 export function isTaskDisabledWithoutBeingFinished(task: Task) {
     if (isTaskDisabledDueToTooStrongBoss(task)) {
         return true;
     }
 
     if (isTaskDisabledDueToMissingItem(task)) {
+        return true;
+    }
+
+    if (isTaskUncosted(task)) {
         return true;
     }
 
@@ -975,6 +1039,12 @@ function doMasteryOfTimeTaskCompletion() {
         // spend a scheduled Artifact outside its gating, or fire a host exit
         // callback. They run only through their own paths.
         if (isSyntheticTask(task)) {
+            continue;
+        }
+
+        // Nor an UNCOSTED task (Pass-B allowlist): free completion bypasses
+        // applyTaskRepStartEffects, so its cost would never be assigned.
+        if (isTaskUncosted(task)) {
             continue;
         }
 
@@ -1897,8 +1967,10 @@ export function knowsPerk(perk: PerkType): boolean {
 
 function skipCurrentZoneIfFree() : boolean {
     if (!GAMESTATE.tasks.every(task => {
-        // Unlocking stuff the player needs to deal with themselves
-        return !taskUnlocksTask(task) && isSingleTickTask(task)
+        // Unlocking stuff the player needs to deal with themselves. An
+        // UNCOSTED task (Pass-B allowlist) also blocks the skip: its cost is
+        // provisional, and free completion would bypass the first-start hook.
+        return !taskUnlocksTask(task) && isSingleTickTask(task) && !isTaskUncosted(task)
     })) {
         return false;
     }
@@ -4418,6 +4490,21 @@ let _zone_loaded_pre_completed = false;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).setTaskCompletionCallback = (fn: typeof _task_completion_callback) => {
     _task_completion_callback = fn;
+};
+
+// Set the Pass-B cost-assignment allowlist (see _costed_task_ids). Accepts an
+// array or Set of task ids (copied into a fresh Set for O(1) lookup) or null to
+// clear. Dormant in standalone play — the standalone game never calls it.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).setCostedTaskIds = (ids: number[] | Set<number> | null) => {
+    _costed_task_ids = ids === null ? null : new Set(ids);
+};
+
+// Register the Pass-B first-start cost callback (see
+// _task_first_start_callback). Pass null to clear. Dormant in standalone play.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).setTaskFirstStartCallback = (fn: typeof _task_first_start_callback) => {
+    _task_first_start_callback = fn;
 };
 
 // Grant a perk from outside a task completion — the path an AP-delivered
