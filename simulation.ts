@@ -51,6 +51,19 @@ let _task_completion_callback: ((info: {
 // sets it. Stored as a Set for O(1) lookup — it is consulted per task per tick
 // via updateEnabledTasks.
 let _costed_task_ids: Set<number> | null = null;
+// Tasks the automation must judge as PERK TASKS even though their `perk` field
+// says otherwise (AP-authoritative grants: the randomizer patches a perk task's
+// `perk` -> PerkType.Count to suppress the local grant, and the perk instead
+// arrives as an AP item). Both categorizers gate on
+// `def.perk != Count && !hasPerk(def.perk)`, so without this override a
+// suppressed perk task (a) is judged by the `other` threshold category's
+// energy-per-level metric, which perk tasks fail BY DESIGN (their xp_mult is
+// deliberately tiny — the perk is the reward), and (b) loses its place in the
+// auto-fill "perk" priority band. Both effects also bite once AP delivers the
+// perk early, since `hasPerk` then short-circuits the vanilla check too.
+// The host retires an id once its AP location is checked. null (default) =
+// inert; standalone play never sets it.
+let _perk_category_task_ids: Set<number> | null = null;
 // First-start cost callback (Pass-B balance walk). Fired SYNCHRONOUSLY the
 // moment a real task begins the first rep of its current run (reps == 0 &&
 // progress == 0), BEFORE any cost/progress is evaluated. The callback may
@@ -2265,9 +2278,16 @@ const THRESHOLD_MOD_KEYS: Record<ThresholdCategory, { enabled: keyof GameMods; p
 
 const THRESHOLD_CATEGORY_LIST: ThresholdCategory[] = ["perk_affordable", "perk_unaffordable", "unlocker", "combat", "item", "prestige", "progression", "other"];
 
+// A task whose `perk` field was suppressed for AP-authoritative grants, but
+// which both categorizers must still treat as granting an unearned perk (see
+// _perk_category_task_ids). Always false when the host never set the list.
+function isForcedPerkCategoryTask(def: TaskDefinition): boolean {
+    return _perk_category_task_ids !== null && _perk_category_task_ids.has(def.id);
+}
+
 export function getThresholdCategory(task: Task): ThresholdCategory {
     const def = task.task_definition;
-    if (def.perk != PerkType.Count && !hasPerk(def.perk)) {
+    if (isForcedPerkCategoryTask(def) || (def.perk != PerkType.Count && !hasPerk(def.perk))) {
         return isPerkTaskAffordableThisCycle(task) ? "perk_affordable" : "perk_unaffordable";
     }
     // Checked before combat/item: while the unlock target is still locked
@@ -2723,7 +2743,10 @@ function autoFillCategory(def: TaskDefinition): AutoFillCategory {
     if (def.item != ItemType.Count) {
         return "item";
     }
-    if (def.perk != PerkType.Count && !hasPerk(def.perk)) {
+    // Same override as getThresholdCategory: a suppressed perk task keeps its
+    // place in the cheapest-first "perk" priority band. Checked at the vanilla
+    // position, so a perk-granting Boss still sorts as unlocker/combat.
+    if (isForcedPerkCategoryTask(def) || (def.perk != PerkType.Count && !hasPerk(def.perk))) {
         return "perk";
     }
     if (def.type == TaskType.Prestige) {
@@ -4505,6 +4528,16 @@ let _zone_loaded_pre_completed = false;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).setTaskFirstStartCallback = (fn: typeof _task_first_start_callback) => {
     _task_first_start_callback = fn;
+};
+
+// Tasks the automation must categorize as unearned-perk tasks despite a
+// suppressed `perk` field (see _perk_category_task_ids). Accepts an array or
+// Set of task ids (copied into a fresh Set) or null to clear. The host retires
+// an id once its AP location is checked, so a completed perk task stops being
+// prioritized every run. Dormant in standalone play.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).setPerkCategoryTaskIds = (ids: number[] | Set<number> | null) => {
+    _perk_category_task_ids = ids === null ? null : new Set(ids);
 };
 
 // Grant a perk from outside a task completion — the path an AP-delivered
