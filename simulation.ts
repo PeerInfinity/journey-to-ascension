@@ -90,7 +90,7 @@ const DEFAULT_TICK_RATE = 66.6;
 // upstream's save version. The Changelog popup checks SAVE_VERSION against the
 // newest CHANGELOG entry, so keep this equal to CHANGELOG[0].version — bump both
 // together when adding a fork changelog entry.
-export const SAVE_VERSION = "Fork 1.6";
+export const SAVE_VERSION = "Fork 1.6.2";
 const TASK_STARTED_PROGRESS = 0.01;
 
 // Player-scheduled "use this artifact here" tasks get ids in this range — well
@@ -3655,6 +3655,7 @@ export interface GameMods {
     award_spark_on_discovery: boolean;   // award divine spark when a Prestige task completes
     discovery_spark_fraction: number;    // fraction of full prestige gain awarded on discovery
     force_automation: boolean;           // permanently grant the Amulet (automation) perk
+    advanced_automation: boolean;        // UI-only gate: show the fork's advanced-automation UI (the Advanced Automation panel and the Divinity popup's queue/auto-buy controls) while automation is available. Never affects simulation behavior.
     auto_continue_energy_reset: boolean; // skip the energy-reset summary overlay
     suppress_prestige_popup: boolean;    // suppress the "prestige available" popup
     show_spark_stats: boolean;           // show spark-per-reset (current + peak) under the Divine Spark button
@@ -3738,6 +3739,7 @@ export function defaultMods(): GameMods {
         award_spark_on_discovery: false,
         discovery_spark_fraction: 0.1,
         force_automation: false,
+        advanced_automation: false,
         auto_continue_energy_reset: false,
         suppress_prestige_popup: false,
         show_spark_stats: false,

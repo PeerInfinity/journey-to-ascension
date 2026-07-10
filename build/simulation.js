@@ -80,7 +80,7 @@ const DEFAULT_TICK_RATE = 66.6;
 // upstream's save version. The Changelog popup checks SAVE_VERSION against the
 // newest CHANGELOG entry, so keep this equal to CHANGELOG[0].version — bump both
 // together when adding a fork changelog entry.
-export const SAVE_VERSION = "Fork 1.6";
+export const SAVE_VERSION = "Fork 1.6.2";
 const TASK_STARTED_PROGRESS = 0.01;
 // Player-scheduled "use this artifact here" tasks get ids in this range — well
 // above zone task ids and the host's synthetic exit tasks (>= 10000) — so they
@@ -3093,6 +3093,7 @@ export function defaultMods() {
         award_spark_on_discovery: false,
         discovery_spark_fraction: 0.1,
         force_automation: false,
+        advanced_automation: false,
         auto_continue_energy_reset: false,
         suppress_prestige_popup: false,
         show_spark_stats: false,

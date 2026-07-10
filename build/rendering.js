@@ -1262,7 +1262,7 @@ function triggerPrestigeConfirmation() {
         populatePrestigeView();
     });
 }
-function populatePrestigeView() {
+export function populatePrestigeView() {
     const prestige_overlay = RENDERING.prestige_overlay_element;
     const prestige_div = prestige_overlay.querySelector("#prestige-box");
     if (!prestige_div) {
@@ -1330,10 +1330,18 @@ function populatePrestigeView() {
         const prestiges_done_text = createChildElement(summary_div, "p");
         prestiges_done_text.textContent = `Prestiges done: ${GAMESTATE.prestige_count}`;
     }
+    // Advanced-automation gate: the purchase queue, its badges, and the
+    // auto-buy toggles are part of the fork's advanced-automation UI, so they
+    // render under exactly the same condition as the Advanced Automation
+    // panel (see isAdvancedAutomationVisible). While hidden the popup looks
+    // like upstream (plain buy buttons), but display only: enabled auto-buy
+    // mods and queued purchases keep working.
+    const automation_allowed = isAdvancedAutomationVisible();
+    const queue_mode = automation_allowed && prestige_queue_mode;
     // Prestige purchase queue: a mode toggle (clicks queue instead of buy)
     // and a reset button. The queue itself shows as badges on the purchase
     // buttons rather than as a list.
-    if (GAMESTATE.prestige_layers_unlocked.length > 0) {
+    if (automation_allowed && GAMESTATE.prestige_layers_unlocked.length > 0) {
         const queue_controls = createChildElement(scroll_area, "div");
         queue_controls.className = "prestige-queue-controls";
         const mode_button = createChildElement(queue_controls, "button");
@@ -1404,20 +1412,22 @@ function populatePrestigeView() {
             unlock_button.innerHTML = `${unlock.name}`;
             if (!is_unlocked) {
                 unlock_button.innerHTML += `<br>Cost: ${formatInt(unlock.cost)}`;
-                const positions = getPrestigeQueuePositions("unlock", unlock.type);
-                if (positions.length > 0) {
-                    unlock_button.innerHTML += `<br><span class="queue-badge">Queued #${positions[0]}</span>`;
+                if (automation_allowed) {
+                    const positions = getPrestigeQueuePositions("unlock", unlock.type);
+                    if (positions.length > 0) {
+                        unlock_button.innerHTML += `<br><span class="queue-badge">Queued #${positions[0]}</span>`;
+                    }
                 }
             }
             if (!is_unlocked) {
                 // In queue mode unaffordable purchases stay clickable — being
                 // able to queue what you can't yet afford is the point.
-                unlock_button.disabled = !prestige_queue_mode && unlock.cost > GAMESTATE.divine_spark;
+                unlock_button.disabled = !queue_mode && unlock.cost > GAMESTATE.divine_spark;
             }
             setupTooltipStatic(unlock_button, unlock.name, unlock.get_description());
             if (!is_unlocked) {
                 unlock_button.addEventListener("click", () => {
-                    if (prestige_queue_mode) {
+                    if (queue_mode) {
                         queuePrestigePurchase("unlock", unlock.type);
                     }
                     else {
@@ -1442,14 +1452,16 @@ function populatePrestigeView() {
                 unlock_button.innerHTML = `${upgrade.name}<br>Cost: ${formatInt(cost)}<br>Level: ${level}`;
                 // Entries of one upgrade need not be consecutive (queue order
                 // is exactly click order), so show each pending position.
-                const positions = getPrestigeQueuePositions("repeatable", upgrade.type);
-                if (positions.length > 0) {
-                    const badge = positions.length <= 4
-                        ? `Queued #${positions.join(", #")}`
-                        : `Queued #${positions.slice(0, 3).join(", #")} +${positions.length - 3} more`;
-                    unlock_button.innerHTML += `<br><span class="queue-badge">${badge}</span>`;
+                if (automation_allowed) {
+                    const positions = getPrestigeQueuePositions("repeatable", upgrade.type);
+                    if (positions.length > 0) {
+                        const badge = positions.length <= 4
+                            ? `Queued #${positions.join(", #")}`
+                            : `Queued #${positions.slice(0, 3).join(", #")} +${positions.length - 3} more`;
+                        unlock_button.innerHTML += `<br><span class="queue-badge">${badge}</span>`;
+                    }
                 }
-                unlock_button.disabled = !prestige_queue_mode && cost > GAMESTATE.divine_spark;
+                unlock_button.disabled = !queue_mode && cost > GAMESTATE.divine_spark;
                 setupTooltipStaticHeader(unlock_button, upgrade.name, () => {
                     let desc = upgrade.get_description();
                     desc += "<br><br>Current Effect: ";
@@ -1498,7 +1510,7 @@ function populatePrestigeView() {
                     return desc;
                 });
                 unlock_button.addEventListener("click", () => {
-                    if (prestige_queue_mode) {
+                    if (queue_mode) {
                         queuePrestigePurchase("repeatable", upgrade.type);
                     }
                     else {
@@ -1582,6 +1594,12 @@ const SETTINGS_MOD_TOGGLES = [
         label: "Force Automation",
         tooltip: "Permanently grants the Amulet perk, unlocking Zone Automation and automatic Item use. Turning this off won't remove an Amulet you earned legitimately.",
         mod: "force_automation",
+    },
+    {
+        id: "mod-advanced-automation",
+        label: "Advanced Automation",
+        tooltip: "Shows the fork's advanced-automation UI: the Advanced Automation panel under the Task Automation controls, and the purchase queue / auto-buy controls in the Divinity popup. Only shown while automation itself is available (Amulet held or Force Automation). Display only — automation features already configured keep running while this is off.",
+        mod: "advanced_automation",
     },
     {
         id: "mod-award-spark-on-discovery",
@@ -1706,6 +1724,7 @@ function setupSettings() {
             setMod(toggle.mod, !isModEnabled(toggle.mod));
             updateSettingsDisplay();
             setupControls(); // rebuild so the automation panel appears/hides with the Amulet
+            populatePrestigeView(); // the Divinity popup's automation controls follow the same gate
             updateRendering(); // reflect other effects immediately
         });
         setupTooltip(button, () => `${toggle.label}: ${isModEnabled(toggle.mod) ? "On" : "Off"}`, () => toggle.tooltip);
@@ -1928,6 +1947,7 @@ function handleEvents() {
                     message_div.innerHTML = `Unlocked ${perk.icon}${perk.name}`;
                     message_div.innerHTML += `<br>${perk.getTooltip()}`;
                     setupControls(); // Show the automation controls
+                    populatePrestigeView(); // the Divinity popup's automation controls appear with the Amulet
                     recreateTasks(); // Get rid of Perk indicator
                     recreatePerks();
                     break;
@@ -2145,8 +2165,20 @@ function setupAutomationControls() {
     });
     setupAdvancedAutomationControls(automation_div);
 }
+// The single visibility condition for the fork's advanced-automation UI: the
+// Advanced Automation panel (below) and the Divinity popup's purchase-queue /
+// auto-buy controls (see populatePrestigeView). Two requirements: automation
+// itself is available (the Amulet perk — Force Automation grants it via
+// applyMods, but check the mod too so the UI can't lag a pending grant), and
+// the Advanced Automation settings mod is on. UI-only: simulation behavior
+// never consults this.
+function isAdvancedAutomationVisible() {
+    return (hasPerk(PerkType.Amulet) || isModEnabled("force_automation"))
+        && isModEnabled("advanced_automation");
+}
 // Game Mods — extra automation toggles, shown as a collapsible panel under
-// the Task Automation controls (Amulet-gated, since the parent is).
+// the Task Automation controls (Amulet-gated, since the parent is, and
+// additionally behind the Advanced Automation settings mod).
 const ADVANCED_AUTOMATION_TOGGLES = [
     {
         label: "Resume on Reset",
@@ -2180,6 +2212,11 @@ const ADVANCED_AUTOMATION_TOGGLES = [
     },
 ];
 function setupAdvancedAutomationControls(parent) {
+    // Fork panel only; upstream's own automation controls (the parent) stay
+    // Amulet-gated exactly as upstream had them.
+    if (!isAdvancedAutomationVisible()) {
+        return;
+    }
     const panel = createChildElement(parent, "div");
     panel.className = "advanced-automation";
     const header = createChildElement(panel, "div");

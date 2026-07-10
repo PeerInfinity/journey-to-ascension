@@ -5,6 +5,11 @@ export class ChangelogEntry {
 }
 export const CHANGELOG = [
     {
+        version: "Fork 1.6.2",
+        date: "2026-07-10",
+        changes: "- Added Advanced Automation (Settings, Game Mods; off by default): shows or hides the fork's advanced-automation UI — the Advanced Automation panel under the Task Automation controls, and the Divinity popup's purchase-queue and auto-buy controls (Queue Purchases, Reset Queue, Auto-Buy Cheapest, Unlock Savings and its budget input, and the queue badges on purchase buttons). That UI previously showed unconditionally; it now only renders while this mod is on AND automation itself is available (the Amulet perk, or Force Automation). Purely a display setting: automation features already configured — auto-buying, queued purchases, Auto-Prestige, thresholds, and the rest — keep running while it's off"
+    },
+    {
         version: "Fork 1.6.1",
         date: "2026-07-06",
         changes: "- Auto-Prestige zone-stall trigger default 40 → 20 resets. The Fork 1.5 tuning (20 → 40) was measured with Award Spark on Discovery enabled, which isn't the game's default; with it off, prestiging is the only source of Divine Spark and waiting 40 stalled resets starves the Divinity economy — full-game simulations finish every task in ~20% fewer runs at stall 20, while spark-on play is barely affected. Existing saves keep whatever value they have configured"

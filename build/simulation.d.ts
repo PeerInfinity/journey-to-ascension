@@ -5,7 +5,7 @@ import { RenderEvent } from "./events.js";
 import { SkillType } from "./skills.js";
 import { PrestigeRepeatableType, PrestigeUnlockType, PrestigeLayer } from "./prestige_upgrades.js";
 export declare function isManagedMode(): boolean;
-export declare const SAVE_VERSION = "Fork 1.6";
+export declare const SAVE_VERSION = "Fork 1.6.2";
 export declare class Skill {
     type: SkillType;
     level: number;
@@ -168,6 +168,7 @@ export interface GameMods {
     award_spark_on_discovery: boolean;
     discovery_spark_fraction: number;
     force_automation: boolean;
+    advanced_automation: boolean;
     auto_continue_energy_reset: boolean;
     suppress_prestige_popup: boolean;
     show_spark_stats: boolean;

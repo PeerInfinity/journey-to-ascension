@@ -11,6 +11,7 @@ interface ElementWithTooltip extends HTMLElement {
     generateTooltipBody?: tooltipLambda;
 }
 export declare function getItemNameWithIcon(item_type: ItemType, plural?: boolean): string;
+export declare function populatePrestigeView(): void;
 export declare function formatNumber(n: number, allow_decimals?: boolean): string;
 export declare function formatInt(n: number): string;
 export declare function formatPercentage(n: number): string;

@@ -1,4 +1,4 @@
-import { handleHotkeyPressed, handleHotkeyReleased, Rendering, updateRendering, updateSettingsDisplay, setupControls } from "./rendering.js";
+import { handleHotkeyPressed, handleHotkeyReleased, Rendering, updateRendering, updateSettingsDisplay, setupControls, populatePrestigeView } from "./rendering.js";
 import { Gamestate, saveGame, updateGamestate, resetTasks, calcTickRate, isManagedMode, getMods, getMod, setMod, type GameMods } from "./simulation.js";
 
 function gameLoop() {
@@ -121,6 +121,7 @@ export function resetSave() {
     const ok = setMod(name, value);
     if (ok) {
         setupControls(); // rebuild so the automation panel appears/hides with the Amulet
+        populatePrestigeView(); // the Divinity popup's automation controls follow the same gate
         updateRendering();
         updateSettingsDisplay();
     }
