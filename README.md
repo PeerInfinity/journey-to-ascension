@@ -22,13 +22,22 @@ the live demo does not exercise any substrate features.
 ## Permission & terms
 
 Upstream Journey to Ascension is unlicensed. Meneth granted permission for
-this fork on 2026-05-22, under the following conditions:
+this fork on 2026-05-23, under the following conditions:
 
 - **Non-commercial use only.**
 - **Credit:** Meneth is credited as the original author, with the original
   game linked: https://meneth.github.io/journey-to-ascension/
 - **No endorsement:** no endorsement of this fork or its uses by Meneth is
   implied beyond "this is allowed."
+
+### AI disclosure
+
+The integration edits on the `substrate` branch — the Archipelago and loop-mode
+hooks — are predominantly AI-generated, written with
+[Claude Code](https://claude.ai/code), as is the
+[Archipelago-CC](https://github.com/PeerInfinity/Archipelago-CC) parent project.
+Upstream Journey to Ascension (tracked unchanged on `main`) is Meneth's own work.
+This use of AI tooling was disclosed to Meneth before permission was granted.
 
 ## Building
 
