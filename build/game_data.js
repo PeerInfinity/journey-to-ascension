@@ -88,7 +88,7 @@ const TASK_TYPE_BY_NAME = {
 };
 const ECONOMY_KEYS = [
     "base_task_cost", "zone_cost_exponent", "boss_cost_exponent",
-    "xp_base", "xp_zone_mult", "level_curve",
+    "xp_base", "xp_zone_mult", "level_curve", "zone_speedup_base",
 ];
 // Pristine vanilla definitions, snapshotted before any swap. Behavior-slot
 // dataset entries inherit their compiled lambdas (tooltips, on_consume,
@@ -190,6 +190,8 @@ export function validateGameDataset(dataset) {
     const validPerk = validRosterIndex(perks);
     const validItem = validRosterIndex(items);
     // Zones / tasks
+    const value_mode = ds.economy?.["value_mode"];
+    const raw_mode = value_mode === "raw";
     const zones = Array.isArray(ds.zones) ? ds.zones : [];
     if (!Array.isArray(ds.zones) || zones.length === 0)
         err("zones must be a non-empty array");
@@ -198,6 +200,9 @@ export function validateGameDataset(dataset) {
     zones.forEach((zone, zi) => {
         if (typeof zone?.name !== "string" || zone.name.length === 0)
             err(`zones[${zi}].name must be a non-empty string`);
+        if (raw_mode && !(typeof zone?.raw_drain === "number" && zone.raw_drain > 0)) {
+            err(`zones[${zi}].raw_drain must be a positive number under value_mode "raw"`);
+        }
         const tasks = Array.isArray(zone?.tasks) ? zone.tasks : [];
         if (!Array.isArray(zone?.tasks) || tasks.length === 0)
             err(`zones[${zi}] must have a non-empty tasks array`);
@@ -223,6 +228,12 @@ export function validateGameDataset(dataset) {
                 err(`${where}.cost_multiplier must be a positive number`);
             if (!(typeof t?.xp_mult === "number" && t.xp_mult >= 0))
                 err(`${where}.xp_mult must be a non-negative number`);
+            if (raw_mode) {
+                if (!(typeof t?.raw_cost === "number" && t.raw_cost > 0))
+                    err(`${where}.raw_cost must be a positive number under value_mode "raw"`);
+                if (!(typeof t?.raw_xp === "number" && t.raw_xp >= 0))
+                    err(`${where}.raw_xp must be a non-negative number under value_mode "raw"`);
+            }
             if (!(typeof t?.max_reps === "number" && Number.isInteger(t.max_reps) && t.max_reps >= 1))
                 err(`${where}.max_reps must be an integer >= 1`);
             if (t?.perk != null && !validPerk(t.perk))
@@ -318,6 +329,9 @@ export function validateGameDataset(dataset) {
             const value = economy[key];
             if (!(typeof value === "number" && value > 0))
                 err(`economy.${key} must be a positive number`);
+        }
+        if (value_mode !== undefined && value_mode !== "zone_formula" && value_mode !== "raw") {
+            err(`economy.value_mode must be "zone_formula" or "raw", got ${JSON.stringify(value_mode)}`);
         }
     }
     // Item groups
@@ -528,8 +542,10 @@ function swapZoneTables(ds) {
             hidden_by_default: t.hidden_by_default === true,
             unlocks_task: t.unlocks_task ?? -1,
             zone_id: zi,
+            raw_cost: t.raw_cost,
+            raw_xp: t.raw_xp,
         }));
-        ZONES.push({ name: zone.name, tasks });
+        ZONES.push({ name: zone.name, tasks, raw_drain: zone.raw_drain });
     });
     rebuildZoneDerivedMaps();
 }
@@ -544,6 +560,9 @@ function applyRolesAndEconomy(ds) {
     for (const key of ECONOMY_KEYS) {
         ECONOMY[key] = economy[key];
     }
+    // Absent ⇒ zone_formula; also RESETS the mode when a formula dataset is
+    // loaded after a raw one.
+    ECONOMY.value_mode = economy["value_mode"] === "raw" ? "raw" : "zone_formula";
 }
 // Validate, then swap every content table atomically (validation is complete
 // before the first mutation — a failing dataset changes nothing). Idempotent

@@ -72,7 +72,6 @@ let _in_first_start_callback = false;
 export function isManagedMode() {
     return _managed_mode;
 }
-const ZONE_SPEEDUP_BASE = 1.05;
 const STARTING_ENERGY = 100;
 const DEFAULT_TICK_RATE = 66.6;
 // The fork's save format diverged from upstream's (added queue_configs,
@@ -80,7 +79,7 @@ const DEFAULT_TICK_RATE = 66.6;
 // upstream's save version. The Changelog popup checks SAVE_VERSION against the
 // newest CHANGELOG entry, so keep this equal to CHANGELOG[0].version — bump both
 // together when adding a fork changelog entry.
-export const SAVE_VERSION = "Fork 1.7";
+export const SAVE_VERSION = "Fork 1.8";
 const TASK_STARTED_PROGRESS = 0.01;
 // MARK: Dataset-tunable data tables (fork addition)
 //
@@ -109,6 +108,16 @@ export const ECONOMY = {
     xp_base: 8,
     xp_zone_mult: 1.25,
     level_curve: 1.02,
+    // The per-zone speedup/drain backbone (tasks in zone z progress AND
+    // drain zone_speedup_base^z faster — a pure time compression, the two
+    // sites cancel in energy terms).
+    zone_speedup_base: 1.05,
+    // Raw-value economy mode (Fork 1.8). "zone_formula" (vanilla): task
+    // cost/XP and the zone speedup come from the exponential backbones
+    // above. "raw": every dataset task carries absolute raw_cost/raw_xp and
+    // every zone carries raw_drain; the backbone fields above are carried
+    // but unused. Only a loaded dataset can select "raw".
+    value_mode: "zone_formula",
 };
 export const PRESTIGE_DATA = {
     // Divine-spark scaling origin (0-indexed zone; vanilla: zone 15).
@@ -146,7 +155,12 @@ export class Skill {
     }
 }
 export function calcSkillXp(task, task_progress, ignore_boost = false) {
-    const xp_mult = ECONOMY.xp_base;
+    // Raw mode: raw_xp is the absolute per-progress XP base (xp_base and the
+    // zone backbone pre-dissolved into it), applied below at the SAME chain
+    // position as the zone factor it replaces — the multiplication order is
+    // load-bearing for tick-for-tick equivalence with formula mode.
+    const raw = ECONOMY.value_mode == "raw" && task.task_definition.raw_xp !== undefined;
+    const xp_mult = raw ? 1 : ECONOMY.xp_base;
     let xp = task_progress * xp_mult * task.task_definition.xp_mult;
     if (hasPerk(PerkType.Writing)) {
         xp *= 1.5;
@@ -162,7 +176,12 @@ export function calcSkillXp(task, task_progress, ignore_boost = false) {
     if (hasPrestigeUnlock(PrestigeUnlockType.UnparalleledLearning)) {
         xp *= FINAL_PRESTIGE_MULT;
     }
-    xp *= Math.pow(ECONOMY.xp_zone_mult, task.task_definition.zone_id);
+    if (raw) {
+        xp *= task.task_definition.raw_xp;
+    }
+    else {
+        xp *= Math.pow(ECONOMY.xp_zone_mult, task.task_definition.zone_id);
+    }
     if (!ignore_boost && task.xp_boosted) {
         xp *= MAGIC_RING_MULT;
     }
@@ -290,13 +309,39 @@ function storeLoopStartNumbersForNextGameOver() {
     GAMESTATE.power_at_start_of_reset = GAMESTATE.power;
 }
 // MARK: Tasks
+// Raw-value economy mode (Fork 1.8): a task/zone whose dataset carries raw
+// values reads them instead of the zone-keyed backbone formulas. Runtime-
+// synthesized tasks (host-injected exit tasks, scheduled artifact tasks)
+// carry no raw values and fall back to the formula even in raw mode — the
+// backbone fields are still carried by raw datasets for exactly this.
+function usesRawValues(def) {
+    return ECONOMY.value_mode == "raw" && def.raw_cost !== undefined;
+}
+// The per-zone speedup factor — applied to BOTH task progress per tick and
+// energy drain per tick (the two cancel in energy terms; the factor is a pure
+// time compression). In raw mode each zone carries it as raw_drain.
+function calcZoneSpeedupFactor(zone) {
+    if (ECONOMY.value_mode == "raw") {
+        const raw_drain = ZONES[zone]?.raw_drain;
+        if (raw_drain !== undefined) {
+            return raw_drain;
+        }
+    }
+    return Math.pow(ECONOMY.zone_speedup_base, zone);
+}
 export function calcTaskCost(task) {
+    const def = task.task_definition;
+    if (usesRawValues(def)) {
+        // raw_cost is the absolute base cost (the zone/Boss backbone is
+        // pre-dissolved into it); cost_multiplier stays the patch lever.
+        return def.raw_cost * def.cost_multiplier;
+    }
     const base_cost = ECONOMY.base_task_cost;
     const normal_exponent = ECONOMY.zone_cost_exponent;
     const boss_exponent = ECONOMY.boss_cost_exponent;
-    const zone_exponent = task.task_definition.type == TaskType.Boss ? boss_exponent : normal_exponent;
-    const zone_mult = Math.pow(zone_exponent, task.task_definition.zone_id);
-    return base_cost * task.task_definition.cost_multiplier * zone_mult;
+    const zone_exponent = def.type == TaskType.Boss ? boss_exponent : normal_exponent;
+    const zone_mult = Math.pow(zone_exponent, def.zone_id);
+    return base_cost * def.cost_multiplier * zone_mult;
 }
 export function calcTaskProgressMultiplier(task, override_haste = null, override_lightning = null) {
     let mult = 1;
@@ -331,7 +376,7 @@ export function calcTaskProgressMultiplier(task, override_haste = null, override
     if ((override_lightning === null && task.lightning) || override_lightning === true) {
         mult *= BOTTLED_LIGHTNING_MULT;
     }
-    mult *= Math.pow(ZONE_SPEEDUP_BASE, task.task_definition.zone_id);
+    mult *= calcZoneSpeedupFactor(task.task_definition.zone_id);
     if (hasPerk(PerkType.MajorTimeCompression)) {
         mult *= MAJOR_TIME_COMPRESSION_EFFECT;
     }
@@ -994,7 +1039,7 @@ export function calcEnergyDrainPerTickInZone(zone) {
     if (hasPerk(PerkType.MajorTimeCompression)) {
         drain *= MAJOR_TIME_COMPRESSION_EFFECT;
     }
-    drain *= Math.pow(ZONE_SPEEDUP_BASE, zone);
+    drain *= calcZoneSpeedupFactor(zone);
     return drain;
 }
 export function calcEnergyDrainPerTick(task, is_single_tick) {

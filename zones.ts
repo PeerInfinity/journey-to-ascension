@@ -32,6 +32,14 @@ export class TaskDefinition {
     // with cost_multiplier=0, the first (and only) tick of the task
     // still drains the per-tick zone amount before the rep finishes.
     free: boolean = false;
+    // Raw-value economy mode (Fork 1.8; only set by dataset loads whose
+    // economy.value_mode is "raw"). raw_cost: absolute base cost, replaces
+    // base_task_cost × zone/Boss backbone (cost_multiplier still applies).
+    // raw_xp: absolute per-progress XP base, replaces xp_base × zone
+    // backbone (xp_mult still applies). Undefined ⇒ formula fallback, which
+    // is how runtime-synthesized tasks keep working in raw mode.
+    raw_cost?: number | undefined;
+    raw_xp?: number | undefined;
 
     constructor(overrides: Partial<TaskDefinition> = {}) {
         Object.assign(this, overrides);
@@ -55,6 +63,10 @@ export class Task {
 export class Zone {
     name: string = "";
     tasks: TaskDefinition[] = [];
+    // Raw-value economy mode: the zone's speedup/drain factor, replacing
+    // zone_speedup_base^zone (applied to BOTH task progress and energy drain
+    // per tick). Only set by raw-mode dataset loads.
+    raw_drain?: number | undefined;
 }
 
 export const ZONES: Zone[] = [

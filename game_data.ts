@@ -82,11 +82,17 @@ interface DsTask {
     item?: number | null;
     use_item?: number | null;
     prestige_layer?: number | null;
+    raw_cost?: number;
+    raw_xp?: number;
 }
 
 interface DsZone {
     name?: string;
+    // Optional position-independent zone identity (topology/theme references);
+    // the engine itself never reads it.
+    key?: string;
     tasks?: DsTask[];
+    raw_drain?: number;
 }
 
 interface DsPrestigeUnlock {
@@ -199,7 +205,7 @@ const TASK_TYPE_BY_NAME: Record<string, TaskType> = {
 
 const ECONOMY_KEYS = [
     "base_task_cost", "zone_cost_exponent", "boss_cost_exponent",
-    "xp_base", "xp_zone_mult", "level_curve",
+    "xp_base", "xp_zone_mult", "level_curve", "zone_speedup_base",
 ] as const;
 
 // Pristine vanilla definitions, snapshotted before any swap. Behavior-slot
@@ -300,12 +306,17 @@ export function validateGameDataset(dataset: unknown): string[] {
     const validItem = validRosterIndex(items);
 
     // Zones / tasks
+    const value_mode = (ds.economy as Record<string, unknown> | undefined)?.["value_mode"];
+    const raw_mode = value_mode === "raw";
     const zones = Array.isArray(ds.zones) ? ds.zones : [];
     if (!Array.isArray(ds.zones) || zones.length === 0) err("zones must be a non-empty array");
     const task_ids = new Set<number>();
     const unlock_refs: Array<[number, number]> = [];
     zones.forEach((zone, zi) => {
         if (typeof zone?.name !== "string" || zone.name.length === 0) err(`zones[${zi}].name must be a non-empty string`);
+        if (raw_mode && !(typeof zone?.raw_drain === "number" && zone.raw_drain > 0)) {
+            err(`zones[${zi}].raw_drain must be a positive number under value_mode "raw"`);
+        }
         const tasks = Array.isArray(zone?.tasks) ? zone.tasks : [];
         if (!Array.isArray(zone?.tasks) || tasks.length === 0) err(`zones[${zi}] must have a non-empty tasks array`);
         tasks.forEach((t, ti) => {
@@ -324,6 +335,10 @@ export function validateGameDataset(dataset: unknown): string[] {
             if (!Array.isArray(t?.skills) || !t.skills.every(validSkill)) err(`${where}.skills must be an array of live skill indices`);
             if (!(typeof t?.cost_multiplier === "number" && t.cost_multiplier > 0)) err(`${where}.cost_multiplier must be a positive number`);
             if (!(typeof t?.xp_mult === "number" && t.xp_mult >= 0)) err(`${where}.xp_mult must be a non-negative number`);
+            if (raw_mode) {
+                if (!(typeof t?.raw_cost === "number" && t.raw_cost > 0)) err(`${where}.raw_cost must be a positive number under value_mode "raw"`);
+                if (!(typeof t?.raw_xp === "number" && t.raw_xp >= 0)) err(`${where}.raw_xp must be a non-negative number under value_mode "raw"`);
+            }
             if (!(typeof t?.max_reps === "number" && Number.isInteger(t.max_reps) && t.max_reps >= 1)) err(`${where}.max_reps must be an integer >= 1`);
             if (t?.perk != null && !validPerk(t.perk)) err(`${where}.perk must be null or a live perk index`);
             if (t?.item != null && !validItem(t.item)) err(`${where}.item must be null or a live item index`);
@@ -407,6 +422,9 @@ export function validateGameDataset(dataset: unknown): string[] {
         for (const key of ECONOMY_KEYS) {
             const value = economy[key];
             if (!(typeof value === "number" && value > 0)) err(`economy.${key} must be a positive number`);
+        }
+        if (value_mode !== undefined && value_mode !== "zone_formula" && value_mode !== "raw") {
+            err(`economy.value_mode must be "zone_formula" or "raw", got ${JSON.stringify(value_mode)}`);
         }
     }
 
@@ -623,8 +641,10 @@ function swapZoneTables(ds: JtaDataset) {
             hidden_by_default: t.hidden_by_default === true,
             unlocks_task: t.unlocks_task ?? -1,
             zone_id: zi,
+            raw_cost: t.raw_cost,
+            raw_xp: t.raw_xp,
         }));
-        ZONES.push({ name: zone.name as string, tasks });
+        ZONES.push({ name: zone.name as string, tasks, raw_drain: zone.raw_drain });
     });
     rebuildZoneDerivedMaps();
 }
@@ -637,10 +657,13 @@ function applyRolesAndEconomy(ds: JtaDataset) {
     SKILL_ROLES.power_skills = [...(roles.power_skills as number[])] as SkillType[];
     SKILL_ROLES.spite_skills = [...(roles.spite_skills as number[])] as SkillType[];
 
-    const economy = ds.economy as Record<string, number>;
+    const economy = ds.economy as Record<string, unknown>;
     for (const key of ECONOMY_KEYS) {
         ECONOMY[key] = economy[key] as number;
     }
+    // Absent ⇒ zone_formula; also RESETS the mode when a formula dataset is
+    // loaded after a raw one.
+    ECONOMY.value_mode = economy["value_mode"] === "raw" ? "raw" : "zone_formula";
 }
 
 // Validate, then swap every content table atomically (validation is complete

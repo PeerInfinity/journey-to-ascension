@@ -34,10 +34,14 @@ interface DsTask {
     item?: number | null;
     use_item?: number | null;
     prestige_layer?: number | null;
+    raw_cost?: number;
+    raw_xp?: number;
 }
 interface DsZone {
     name?: string;
+    key?: string;
     tasks?: DsTask[];
+    raw_drain?: number;
 }
 interface DsPrestigeUnlock {
     placeholder?: boolean;

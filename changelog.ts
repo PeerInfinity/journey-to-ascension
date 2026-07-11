@@ -6,6 +6,12 @@ export class ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
+        version: "Fork 1.8",
+        date: "2026-07-11",
+        changes: "- Datasets loaded through the synthetic game data boundary can now use a raw-value economy (economy.value_mode: \"raw\"): every task carries an absolute base cost and XP rate and every zone carries its speedup/drain factor, instead of deriving them from the zone-indexed exponential formulas. Multiplier-style patch levers (cost_multiplier, xp_mult) keep working on top of the raw values. Without a dataset — or with a formula-mode dataset — nothing changes<br>"
+        + "- The per-zone speedup/drain base (1.05, applied to both task speed and Energy drain per Zone) joined the dataset-tunable economy constants with its vanilla default unchanged. No gameplay change without a dataset"
+    },
+    {
         version: "Fork 1.7",
         date: "2026-07-10",
         changes: "- Added a synthetic game data boundary for the substrate host (window.loadGameData): the host can load a versioned dataset document that replaces the game's content tables — skills, zones and tasks, perks, items, prestige upgrades, skill roles, and the economy constants — after which the game re-initializes against a save slot keyed by that dataset's id, so dataset saves, substrate saves, and standalone saves never touch each other. Saves made under a dataset are stamped with its id and refused anywhere else. Purely dormant in normal play: with no dataset loaded (standalone or substrate), nothing changes<br>"

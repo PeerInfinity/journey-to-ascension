@@ -25,6 +25,8 @@ export declare class TaskDefinition {
     unlocks_task: number;
     zone_id: number;
     free: boolean;
+    raw_cost?: number | undefined;
+    raw_xp?: number | undefined;
     constructor(overrides?: Partial<TaskDefinition>);
 }
 export declare class Task {
@@ -40,6 +42,7 @@ export declare class Task {
 export declare class Zone {
     name: string;
     tasks: TaskDefinition[];
+    raw_drain?: number | undefined;
 }
 export declare const ZONES: Zone[];
 export declare const TASK_LOOKUP: Map<number, TaskDefinition>;
