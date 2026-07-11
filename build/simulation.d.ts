@@ -5,7 +5,28 @@ import { RenderEvent } from "./events.js";
 import { SkillType } from "./skills.js";
 import { PrestigeRepeatableType, PrestigeUnlockType, PrestigeLayer } from "./prestige_upgrades.js";
 export declare function isManagedMode(): boolean;
-export declare const SAVE_VERSION = "Fork 1.6.2";
+export declare const SAVE_VERSION = "Fork 1.7";
+export declare const SKILL_ROLES: {
+    ascension_skill: SkillType;
+    travel_skill: SkillType;
+    attunement_skills: SkillType[];
+    power_skills: SkillType[];
+    spite_skills: SkillType[];
+};
+export declare const ECONOMY: {
+    base_task_cost: number;
+    zone_cost_exponent: number;
+    boss_cost_exponent: number;
+    xp_base: number;
+    xp_zone_mult: number;
+    level_curve: number;
+};
+export declare const PRESTIGE_DATA: {
+    spark_zone_origin: number;
+    sbtv_unlock_task_ids: number[];
+};
+export declare function setLoadedDataset(id: string, schema_version: number): void;
+export declare function getLoadedDatasetId(): string | null;
 export declare class Skill {
     type: SkillType;
     level: number;

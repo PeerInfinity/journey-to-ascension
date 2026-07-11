@@ -90,8 +90,63 @@ const DEFAULT_TICK_RATE = 66.6;
 // upstream's save version. The Changelog popup checks SAVE_VERSION against the
 // newest CHANGELOG entry, so keep this equal to CHANGELOG[0].version — bump both
 // together when adding a fork changelog entry.
-export const SAVE_VERSION = "Fork 1.6.2";
+export const SAVE_VERSION = "Fork 1.7";
 const TASK_STARTED_PROGRESS = 0.01;
+
+// MARK: Dataset-tunable data tables (fork addition)
+//
+// The synthetic-game-data boundary (window.loadGameData, see game_data.ts)
+// swaps the content tables at runtime. These objects carry the couplings that
+// used to be compiled constants: skill-identity roles, the economy backbone,
+// and the two absolute prestige couplings. Vanilla values are the defaults;
+// loadGameData overwrites the fields IN PLACE. With no dataset loaded nothing
+// ever writes them, so every reader behaves exactly as the old literals did.
+
+export const SKILL_ROLES = {
+    // Half starting level from Transcendant Aptitude; also the spite pairing.
+    ascension_skill: SkillType.Ascension as SkillType,
+    // The Godly Travel prestige multiplier target.
+    travel_skill: SkillType.Travel as SkillType,
+    // Base attunement skills. The Fully Attuned / Crafting Breakthrough
+    // conditional extensions stay keyed to their behavior slots (fixed
+    // behavior slots, so Search/Crafting identities are stable).
+    attunement_skills: [SkillType.Magic, SkillType.Study] as SkillType[],
+    power_skills: [SkillType.Combat, SkillType.Fortitude] as SkillType[],
+    spite_skills: [SkillType.Ascension, SkillType.Charisma] as SkillType[],
+};
+
+export const ECONOMY = {
+    base_task_cost: 10,
+    zone_cost_exponent: 2.2,
+    boss_cost_exponent: 4,
+    xp_base: 8,
+    xp_zone_mult: 1.25,
+    level_curve: 1.02,
+};
+
+export const PRESTIGE_DATA = {
+    // Divine-spark scaling origin (0-indexed zone; vanilla: zone 15).
+    spark_zone_origin: 14,
+    // Tasks unlocked by the See Beyond the Veil prestige unlockable — the
+    // engine's only hardcoded task-id list, now data.
+    sbtv_unlock_task_ids: [17, 28, 88, 158, 209] as number[],
+};
+
+// Identity of the dataset loaded via window.loadGameData; null = the built-in
+// vanilla tables. Keys the save slot (see getSaveLocation) and stamps the
+// save blob, because numeric task/perk/item/skill ids are save-load-bearing —
+// a save is only meaningful under the dataset that produced it.
+let _loaded_dataset_id: string | null = null;
+let _loaded_dataset_schema_version: number | null = null;
+
+export function setLoadedDataset(id: string, schema_version: number) {
+    _loaded_dataset_id = id;
+    _loaded_dataset_schema_version = schema_version;
+}
+
+export function getLoadedDatasetId(): string | null {
+    return _loaded_dataset_id;
+}
 
 // Player-scheduled "use this artifact here" tasks get ids in this range — well
 // above zone task ids and the host's synthetic exit tasks (>= 10000) — so they
@@ -113,7 +168,7 @@ export class Skill {
 }
 
 export function calcSkillXp(task: Task, task_progress: number, ignore_boost = false): number {
-    const xp_mult = 8;
+    const xp_mult = ECONOMY.xp_base;
     let xp = task_progress * xp_mult * task.task_definition.xp_mult;
 
     if (hasPerk(PerkType.Writing)) {
@@ -136,7 +191,7 @@ export function calcSkillXp(task: Task, task_progress: number, ignore_boost = fa
         xp *= FINAL_PRESTIGE_MULT;
     }
 
-    xp *= Math.pow(1.25, task.task_definition.zone_id);
+    xp *= Math.pow(ECONOMY.xp_zone_mult, task.task_definition.zone_id);
 
     if (!ignore_boost && task.xp_boosted) {
         xp *= MAGIC_RING_MULT;
@@ -150,7 +205,7 @@ export function calcSkillXpNeeded(skill: Skill): number {
 }
 
 export function calcSkillXpNeededAtLevel(level: number, skill_type: SkillType): number {
-    const exponent_base = 1.02;
+    const exponent_base = ECONOMY.level_curve;
     const base_amount = 10;
     const skill_modifier = (SKILL_DEFINITIONS[skill_type] as SkillDefinition).xp_needed_mult;
 
@@ -250,7 +305,7 @@ export function calcSkillTaskProgressWithoutLevel(skill_type: SkillType): number
         mult *= calcSpiteTheGodsBonus();
     }
 
-    if (skill_type == SkillType.Travel && hasPrestigeUnlock(PrestigeUnlockType.GodlyTravel)) {
+    if (skill_type == SKILL_ROLES.travel_skill && hasPrestigeUnlock(PrestigeUnlockType.GodlyTravel)) {
         mult *= GODLY_TRAVEL_MULT;
     }
 
@@ -279,7 +334,7 @@ function initializeSkills() {
     const global_target_level = getPrestigeRepeatableLevel(PrestigeRepeatableType.TranscendantAptitude) * TRANSCENDANT_APTITUDE_MULT;
 
     for (let skill = 0; skill < SkillType.Count; ++skill) {
-        const target_level = skill == SkillType.Ascension ? global_target_level / 2 : global_target_level;
+        const target_level = skill == SKILL_ROLES.ascension_skill ? global_target_level / 2 : global_target_level;
         GAMESTATE.skills.push(new Skill(skill, target_level));
         GAMESTATE.skills_at_start_of_reset.push(target_level);
     }
@@ -298,9 +353,9 @@ function storeLoopStartNumbersForNextGameOver() {
 // MARK: Tasks
 
 export function calcTaskCost(task: Task): number {
-    const base_cost = 10;
-    const normal_exponent = 2.2;
-    const boss_exponent = 4;
+    const base_cost = ECONOMY.base_task_cost;
+    const normal_exponent = ECONOMY.zone_cost_exponent;
+    const boss_exponent = ECONOMY.boss_cost_exponent;
     const zone_exponent = task.task_definition.type == TaskType.Boss ? boss_exponent : normal_exponent;
     const zone_mult = Math.pow(zone_exponent, task.task_definition.zone_id);
 
@@ -2123,7 +2178,7 @@ export function calcAttunementGain(task: Task): number {
 }
 
 export function calcAttunementSkills() {
-    const attunement_skills = [SkillType.Magic, SkillType.Study];
+    const attunement_skills = [...SKILL_ROLES.attunement_skills];
     if (hasPrestigeUnlock(PrestigeUnlockType.FullyAttuned)) {
         attunement_skills.push(SkillType.Search);
     }
@@ -2136,11 +2191,11 @@ export function calcAttunementSkills() {
 }
 
 export function getPowerSkills() {
-    return [SkillType.Combat, SkillType.Fortitude];
+    return [...SKILL_ROLES.power_skills];
 }
 
 export function getSpiteTheGodsSkills() {
-    return [SkillType.Ascension, SkillType.Charisma];
+    return [...SKILL_ROLES.spite_skills];
 }
 
 // MARK: Run Task History / Auto Magic Ring (Game Mod)
@@ -2976,7 +3031,7 @@ export function getPrestigeGainExponent() {
 }
 
 export function calcDivineSparkGainFromHighestZone(zone: number) {
-    const prestige_zone = 15 - 1; // Due to 0-indexing
+    const prestige_zone = PRESTIGE_DATA.spark_zone_origin; // 0-indexed (vanilla: zone 15)
     const effective_zone = Math.max(0, zone - prestige_zone);
     let gain_mult = Math.pow(getPrestigeGainExponent(), effective_zone);
     if (hasPerk(PerkType.Awakening)) {
@@ -3281,11 +3336,11 @@ function applyPrestigeUnlockEffects(unlock: PrestigeUnlockType, show_notificatio
         tryAddPerk(PerkType.MajorTimeCompression, show_notification);
         doMasteryOfTimeTaskCompletion();
     } else if (unlock == PrestigeUnlockType.SeeBeyondTheVeil) {
-        unlockTask(17); // Secret Fishing Spot
-        unlockTask(28); // Training Dummy
-        unlockTask(88); // Train at every Guild
-        unlockTask(158); // Divine Notes
-        unlockTask(209); // Gaze Beyond the Veil
+        // Vanilla: 17 Secret Fishing Spot, 28 Training Dummy, 88 Train at
+        // every Guild, 158 Divine Notes, 209 Gaze Beyond the Veil.
+        for (const task_id of PRESTIGE_DATA.sbtv_unlock_task_ids) {
+            unlockTask(task_id);
+        }
     } else if (unlock == PrestigeUnlockType.DivineSupremacy) {
         GAMESTATE.max_energy += DIVINE_SUPREMACY_ENERGY;
         // Mirror into the starting-energy-bonus accumulator (fork hook);
@@ -3339,7 +3394,7 @@ export function increasePrestigeRepeatableLevel(repeatable: PrestigeRepeatableTy
     if (repeatable == PrestigeRepeatableType.TranscendantAptitude) {
         const global_target_level = (current_level + 1) * TRANSCENDANT_APTITUDE_MULT;
         for (const skill of GAMESTATE.skills) {
-            const target_level = skill.type == SkillType.Ascension ? global_target_level / 2 : global_target_level;
+            const target_level = skill.type == SKILL_ROLES.ascension_skill ? global_target_level / 2 : global_target_level;
             skill.level = Math.max(target_level, skill.level);
         }
     } else if (repeatable == PrestigeRepeatableType.Energized) {
@@ -3483,7 +3538,14 @@ export const SAVE_LOCATION = "incrementalGameSave";
 // touch a standalone save on the same origin. One shared substrate slot
 // across all presets/worlds — the game content is identical across presets;
 // only the host-owned region topology differs.
+//
+// A loaded dataset adds its own dimension: numeric task/perk/item/skill ids
+// are save-load-bearing, so each dataset gets its own slot. Vanilla managed
+// play keeps the plain substrate slot; standalone is untouched.
 export function getSaveLocation(): string {
+    if (_loaded_dataset_id !== null) {
+        return SAVE_LOCATION + "_substrate__" + _loaded_dataset_id;
+    }
     return _managed_mode ? SAVE_LOCATION + "_substrate" : SAVE_LOCATION;
 }
 
@@ -3520,6 +3582,14 @@ export function saveGame() {
         }
     }
 
+    // Stamp dataset saves with their dataset identity so loadGame can refuse
+    // a blob that doesn't belong to the loaded tables (hand-copied saves,
+    // key collisions). Vanilla saves are unchanged — no stamp.
+    if (_loaded_dataset_id !== null) {
+        saveData.dataset_id = _loaded_dataset_id;
+        saveData.dataset_schema_version = _loaded_dataset_schema_version;
+    }
+
     // Save to localStorage
     const json = JSON.stringify(saveData, (key, value) => {
         if (typeof value === 'object' && value !== null && 'id' in value) {
@@ -3549,6 +3619,22 @@ function loadGame(): boolean {
     }
 
     try {
+        // Refuse a blob whose dataset stamp doesn't match the loaded tables
+        // BEFORE parseSave: the task reviver resolves ids via TASK_LOOKUP, so
+        // a foreign blob would revive undefined task definitions and crash
+        // later instead of failing cleanly here. Mismatch = fresh init.
+        const stamp = JSON.parse(saved_game) as { dataset_id?: unknown, dataset_schema_version?: unknown };
+        if (_loaded_dataset_id === null) {
+            if (stamp.dataset_id !== undefined) {
+                console.warn("Ignoring save from dataset", stamp.dataset_id, "— no dataset loaded");
+                return false;
+            }
+        } else if (stamp.dataset_id !== _loaded_dataset_id
+            || stamp.dataset_schema_version !== _loaded_dataset_schema_version) {
+            console.warn("Ignoring save from dataset", stamp.dataset_id, "— loaded dataset is", _loaded_dataset_id);
+            return false;
+        }
+
         const data = parseSave(saved_game);
         loadGameFromData(data);
     } catch (e) {
@@ -3561,6 +3647,11 @@ function loadGame(): boolean {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function loadGameFromData(data: any) {
+    // The dataset stamp is envelope metadata, not game state — drop it so it
+    // never lands on GAMESTATE (loadGame already verified it).
+    delete data.dataset_id;
+    delete data.dataset_schema_version;
+
     Object.keys(data).forEach(key => {
         const value = data[key];
 

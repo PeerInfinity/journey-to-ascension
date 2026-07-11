@@ -5,6 +5,12 @@ export class ChangelogEntry {
 }
 export const CHANGELOG = [
     {
+        version: "Fork 1.7",
+        date: "2026-07-10",
+        changes: "- Added a synthetic game data boundary for the substrate host (window.loadGameData): the host can load a versioned dataset document that replaces the game's content tables — skills, zones and tasks, perks, items, prestige upgrades, skill roles, and the economy constants — after which the game re-initializes against a save slot keyed by that dataset's id, so dataset saves, substrate saves, and standalone saves never touch each other. Saves made under a dataset are stamped with its id and refused anywhere else. Purely dormant in normal play: with no dataset loaded (standalone or substrate), nothing changes<br>"
+            + "- Several previously compiled-in constants are now internal data with unchanged vanilla defaults, so datasets can vary them: the See Beyond the Veil task list, the Divine Spark scaling origin (Zone 15), the skill roles (Ascension starting-level halving, Godly Travel's target skill, and the Attunement/Power/Spite the Gods skill sets), and the task cost / XP / level-curve constants. No gameplay change without a dataset"
+    },
+    {
         version: "Fork 1.6.2",
         date: "2026-07-10",
         changes: "- Added Advanced Automation (Settings, Game Mods; off by default): shows or hides the fork's advanced-automation UI — the Advanced Automation panel under the Task Automation controls, and the Divinity popup's purchase-queue and auto-buy controls (Queue Purchases, Reset Queue, Auto-Buy Cheapest, Unlock Savings and its budget input, and the queue badges on purchase buttons). That UI previously showed unconditionally; it now only renders while this mod is on AND automation itself is available (the Amulet perk, or Force Automation). Purely a display setting: automation features already configured — auto-buying, queued purchases, Auto-Prestige, thresholds, and the rest — keep running while it's off"

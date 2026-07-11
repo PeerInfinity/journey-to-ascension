@@ -3,7 +3,7 @@ import { ItemType } from "./items.js";
 import { getPerkNameWithEmoji, PerkType } from "./perks.js";
 import { formatPercentage, getItemNameWithIcon, getSkillString } from "./rendering.js";
 import { ATTUNEMENT_EMOJI, ATTUNEMENT_TEXT, DIVINE_SPARK_TEXT, ENERGY_TEXT, POWER_TEXT, XP_TEXT } from "./rendering_constants.js";
-import { calcPerkySpeedMultiplier, getPrestigeGainExponent, hasPrestigeUnlock } from "./simulation.js";
+import { calcPerkySpeedMultiplier, getPrestigeGainExponent, hasPrestigeUnlock, PRESTIGE_DATA } from "./simulation.js";
 import { REFLECTIONS_ON_THE_JOURNEY_BASE, REFLECTIONS_ON_THE_JOURNEY_BOOSTED_BASE } from "./simulation_constants.js";
 import { SkillType } from "./skills.js";
 
@@ -262,12 +262,14 @@ export const PRESTIGE_REPEATABLES: PrestigeRepeatable[] = [
         type: PrestigeRepeatableType.DivineLightning,
         layer: PrestigeLayer.TranscendHumanity,
         name: "Divine Lightning",
-        get_description: () => { 
+        get_description: () => {
             const highest_zone = GAMESTATE.highest_prestige_zone + 1;
-            const current_zone_diff = highest_zone - 15;
+            const origin_zone = PRESTIGE_DATA.spark_zone_origin + 1; // 1-based (vanilla: 15)
+            const example_diff = 4;
+            const current_zone_diff = highest_zone - origin_zone;
 
             let tooltip = `Increases the exponent for the ${DIVINE_SPARK_TEXT} gain calculation by ${DIVINE_LIGHTNING_EXPONENT_INCREASE}`;
-            tooltip += `<br>One more level would increase ${DIVINE_SPARK_TEXT} gain at Zone 19 by ${(calcDivineSparkIncrease(4) * 100).toFixed(0)}%, and ${(calcDivineSparkIncrease(current_zone_diff) * 100).toFixed(0)}% at Zone ${highest_zone}`;
+            tooltip += `<br>One more level would increase ${DIVINE_SPARK_TEXT} gain at Zone ${origin_zone + example_diff} by ${(calcDivineSparkIncrease(example_diff) * 100).toFixed(0)}%, and ${(calcDivineSparkIncrease(current_zone_diff) * 100).toFixed(0)}% at Zone ${highest_zone}`;
             return tooltip;
          },
         initial_cost: 1000,

@@ -1,5 +1,6 @@
 import { handleHotkeyPressed, handleHotkeyReleased, Rendering, updateRendering, updateSettingsDisplay, setupControls, populatePrestigeView } from "./rendering.js";
 import { Gamestate, saveGame, updateGamestate, resetTasks, calcTickRate, isManagedMode, getMods, getMod, setMod } from "./simulation.js";
+import { applyGameDataset } from "./game_data.js";
 function gameLoop() {
     updateGamestate();
     updateRendering();
@@ -31,10 +32,15 @@ if (typeof window !== "undefined" && typeof window.location !== "undefined") {
         }
     }
 }
+// Whether the real page bootstrap ran (vs a headless import with DOM stubs,
+// where DOMContentLoaded never fires). loadGameData only rebuilds the
+// Rendering when there is a live page to rebuild.
+let _rendering_started = false;
 document.addEventListener("DOMContentLoaded", () => {
     GAMESTATE.start();
     RENDERING.initialize();
     RENDERING.start();
+    _rendering_started = true;
     // In managed mode the host owns the tick clock — it calls
     // resumeGameLoop() when the player enters a jta region and
     // pauseGameLoop() when they leave. Rendering is unaffected.
@@ -87,6 +93,32 @@ window.initializeHeadless = () => {
     GAMESTATE = new Gamestate();
     GAMESTATE.initialize();
     return true;
+};
+// MARK: Synthetic game data (see game_data.ts)
+//
+// Swap the engine's content tables to a versioned dataset document, then
+// re-initialize against the dataset-keyed save slot (load a matching save if
+// one exists, else fresh init) — live Task/Skill/perk state references the
+// old tables, so a dataset swap mid-game is a reset by definition.
+// Idempotent per dataset_id (a repeat call with the loaded dataset changes
+// nothing); a validation failure applies nothing. Dormant when never called.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.loadGameData = (dataset) => {
+    const result = applyGameDataset(dataset);
+    if (!result.ok) {
+        return { ok: false, errors: result.errors };
+    }
+    if (result.alreadyLoaded) {
+        return { ok: true };
+    }
+    GAMESTATE = new Gamestate();
+    GAMESTATE.start();
+    if (_rendering_started) {
+        RENDERING = new Rendering();
+        RENDERING.initialize();
+        RENDERING.start();
+    }
+    return { ok: true };
 };
 // MARK: Game Mods API (for substrate / AP host and console use)
 //

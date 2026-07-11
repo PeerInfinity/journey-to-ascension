@@ -1,5 +1,5 @@
 import { Task, TaskDefinition, ZONES, TaskType, PERKS_BY_ZONE, ITEMS_BY_ZONE } from "./zones.js";
-import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, getSaveLocation, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, getBossEnergyDisparityLimit, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId, getQueueConfigs, getActiveQueueIndex, getQueueRunsOnCurrent, advanceQueueCycle, addQueue, removeQueue, setQueueAutoUseMode, getQueueExcludedItems, addQueueExcludedItem, removeQueueExcludedItem, setQueueRepeatCount, setQueueName, moveQueue, setActiveQueue, isEditMode, enterEditMode, exitEditMode, setEditZone, getEditMaxZone, autoFillAllPriorities, getAutoFillOrder, moveAutoFillCategory, resetAutoFillOrder, calcSparkPerReset, maybeAutoPrestige, queuePrestigePurchase, resetPrestigeBuyQueue, getPrestigeQueuePositions, THRESHOLD_METRIC_REP, THRESHOLD_METRIC_RESETS, THRESHOLD_ALL_SKIPPED_IDLE, type AutoUseMode, type GameMods } from "./simulation.js";
+import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, getSaveLocation, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, getBossEnergyDisparityLimit, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone, setMod, getMod, isModEnabled, addArtifactTask, removeArtifactTask, isArtifactTaskId, getQueueConfigs, getActiveQueueIndex, getQueueRunsOnCurrent, advanceQueueCycle, addQueue, removeQueue, setQueueAutoUseMode, getQueueExcludedItems, addQueueExcludedItem, removeQueueExcludedItem, setQueueRepeatCount, setQueueName, moveQueue, setActiveQueue, isEditMode, enterEditMode, exitEditMode, setEditZone, getEditMaxZone, autoFillAllPriorities, getAutoFillOrder, moveAutoFillCategory, resetAutoFillOrder, calcSparkPerReset, maybeAutoPrestige, queuePrestigePurchase, resetPrestigeBuyQueue, getPrestigeQueuePositions, SKILL_ROLES, THRESHOLD_METRIC_REP, THRESHOLD_METRIC_RESETS, THRESHOLD_ALL_SKIPPED_IDLE, type AutoUseMode, type GameMods } from "./simulation.js";
 import { GAMESTATE, RENDERING, resetSave } from "./game.js";
 import { ItemType, ItemDefinition, ITEMS, HASTE_MULT, ARTIFACTS, MAGIC_RING_MULT, BOTTLED_LIGHTNING_MULT } from "./items.js";
 import { PerkDefinition, PerkType, PERKS, getPerkNameWithEmoji } from "./perks.js";
@@ -2390,7 +2390,7 @@ function handleEvents() {
             case EventType.UnlockedPower:
                 {
                     message_div.innerHTML = `Unlocked 💪Power mechanic`;
-                    message_div.innerHTML += `<br>Boosts ${getSkillString(SkillType.Combat)} and ${getSkillString(SkillType.Fortitude)}`;
+                    message_div.innerHTML += `<br>Boosts ${joinWithCommasAndAnd(getPowerSkills().map(getSkillString))}`;
                     recreateTasks();
                     break;
                 }
@@ -3360,7 +3360,7 @@ function updateExtraStats() {
     if (GAMESTATE.has_unlocked_power && RENDERING.power_element.classList.contains("hidden")) {
         RENDERING.power_element.classList.remove("hidden");
         setupTooltip(RENDERING.power_element, function () { return `💪Power - ${formatInt(GAMESTATE.power)}`; }, function () {
-            let tooltip = `Increases ${getSkillString(SkillType.Combat)} and ${getSkillString(SkillType.Fortitude)} speed by ${formatInt(GAMESTATE.power)}%`;
+            let tooltip = `Increases ${joinWithCommasAndAnd(getPowerSkills().map(getSkillString))} speed by ${formatInt(GAMESTATE.power)}%`;
             tooltip += `<br><br>Increased by fighting Bosses`;
 
             return tooltip;
@@ -3502,7 +3502,7 @@ function populateStatsView() {
                 createTwoElementRow(skill_table, "Spite the Gods", `x${formatNumber(calcSpiteTheGodsBonus())}`);
             }
 
-            if (skill_type == SkillType.Travel && hasPrestigeUnlock(PrestigeUnlockType.GodlyTravel)) {
+            if (skill_type == SKILL_ROLES.travel_skill && hasPrestigeUnlock(PrestigeUnlockType.GodlyTravel)) {
                 createTwoElementRow(skill_table, "Godly Travel", `x${GODLY_TRAVEL_MULT}`);
             }
         }
