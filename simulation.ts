@@ -940,14 +940,12 @@ function applyFinishTaskRepEffects(task: Task) {
     }
 
     // Scheduled artifact task: using it is the whole point of the task. The
-    // performed-actions log already recorded this as the artifact task, so
-    // suppress the duplicate item entry from this internal use.
+    // performed-actions log skips the artifact task itself and records this
+    // internal item use instead.
     const artifact_spec = getArtifactTaskSpec(task.task_definition.id);
     if (artifact_spec && (GAMESTATE.items.get(artifact_spec.item) ?? 0) > 0) {
         artifact_spec.done = true;
-        _suppress_item_record = true;
         useItem(artifact_spec.item, 1);
-        _suppress_item_record = false;
         disableItemUndo();
     }
 
@@ -2318,16 +2316,15 @@ export interface PerformedAction {
 
 let _current_run_actions: PerformedAction[] = [];
 let _previous_run_actions: PerformedAction[] = [];
-// Set true while a scheduled artifact task applies its item internally, so the
-// use is logged once — as the artifact task itself — not twice (task + item).
-let _suppress_item_record = false;
 
 // Record one completed rep of a task. Consecutive reps of the same task
 // coalesce into a single entry (a run rarely interleaves tasks rep-by-rep),
-// yielding a compact ordered script. ALL tasks are logged, including synthetic
-// ones — scheduled artifact tasks ("Use <artifact>") and host-injected exit
-// tasks — so the log is a full picture of the run.
+// yielding a compact ordered script. Host-injected synthetic tasks (e.g. exit
+// tasks) are logged; scheduled artifact tasks are NOT — an artifact task's use
+// is logged instead via its internal item use (a more reliable signal of what
+// was actually consumed than the task wrapper).
 function recordPerformedTaskRep(task: Task) {
+    if (isArtifactTaskId(task.task_definition.id)) return;
     const def = task.task_definition;
     const last = _current_run_actions[_current_run_actions.length - 1];
     if (last && last.type === "task" && last.task_id === def.id && last.zone_id === def.zone_id) {
@@ -2339,10 +2336,11 @@ function recordPerformedTaskRep(task: Task) {
     }
 }
 
-// Record an item use (positive amounts only — negatives are undos). Suppressed
-// while an artifact task applies its own item, which the task entry covers.
+// Record an item use (positive amounts only — negatives are undos). Covers
+// artifact uses too, whether from a direct click, auto-use, or the internal use
+// a scheduled artifact task performs.
 function recordPerformedItem(item: ItemType, count: number) {
-    if (_suppress_item_record || count <= 0) return;
+    if (count <= 0) return;
     const name = (ITEMS[item] as ItemDefinition | undefined)?.name ?? String(item);
     _current_run_actions.push({ type: "item", name, item, count });
 }
@@ -4571,6 +4569,22 @@ export function updateGamestate() {
             hidden: t.hidden_by_default === true,
         })),
     }));
+};
+
+// All item and artifact definitions — the substrate action-queue catalog reads
+// this to offer every item/artifact use, not just currently-held ones. Kept
+// separate from getAllZoneActions because items are global, not per-zone.
+// `isArtifact` flags the subset that can also be scheduled as artifact tasks
+// (ARTIFACTS). Read-only.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).getAllItems = () => {
+    return (ITEMS as ItemDefinition[])
+        .filter(def => def && def.enum !== ItemType.Count && def.name.length > 0)
+        .map(def => ({
+            type: def.enum,
+            name: def.name,
+            isArtifact: ARTIFACTS.includes(def.enum),
+        }));
 };
 
 // Ordered log of the actions performed during the PREVIOUS run (the run that
