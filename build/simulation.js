@@ -3769,6 +3769,23 @@ window.getAvailableTasks = () => {
         item: t.task_definition.item
     }));
 };
+// All zones' action definitions — the substrate action-queue catalog reads
+// this so it can offer actions for every zone, not just the loaded one. It
+// reads the live ZONES table, which synthetic data replaces wholesale
+// (swapZoneTables), so it stays correct under any loaded dataset. Read-only.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.getAllZoneActions = () => {
+    return ZONES.map((zone, zoneId) => ({
+        zone: zoneId,
+        name: zone.name,
+        tasks: zone.tasks.map(t => ({
+            id: t.id,
+            name: t.name,
+            maxReps: t.max_reps,
+            hidden: t.hidden_by_default === true,
+        })),
+    }));
+};
 // Set energy directly (for testing / substrate sync).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 window.setEnergy = (current, max) => {
