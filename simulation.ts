@@ -939,11 +939,15 @@ function applyFinishTaskRepEffects(task: Task) {
         maybeUseRoundingErrorItem(task.task_definition.item);
     }
 
-    // Scheduled artifact task: using it is the whole point of the task.
+    // Scheduled artifact task: using it is the whole point of the task. The
+    // performed-actions log already recorded this as the artifact task, so
+    // suppress the duplicate item entry from this internal use.
     const artifact_spec = getArtifactTaskSpec(task.task_definition.id);
     if (artifact_spec && (GAMESTATE.items.get(artifact_spec.item) ?? 0) > 0) {
         artifact_spec.done = true;
+        _suppress_item_record = true;
         useItem(artifact_spec.item, 1);
+        _suppress_item_record = false;
         disableItemUndo();
     }
 
@@ -2314,14 +2318,16 @@ export interface PerformedAction {
 
 let _current_run_actions: PerformedAction[] = [];
 let _previous_run_actions: PerformedAction[] = [];
+// Set true while a scheduled artifact task applies its item internally, so the
+// use is logged once — as the artifact task itself — not twice (task + item).
+let _suppress_item_record = false;
 
 // Record one completed rep of a task. Consecutive reps of the same task
 // coalesce into a single entry (a run rarely interleaves tasks rep-by-rep),
-// yielding a compact ordered script. Synthetic tasks (host-injected exit tasks,
-// artifact tasks) are skipped — they are substrate/UI machinery, not player
-// actions to replay.
+// yielding a compact ordered script. ALL tasks are logged, including synthetic
+// ones — scheduled artifact tasks ("Use <artifact>") and host-injected exit
+// tasks — so the log is a full picture of the run.
 function recordPerformedTaskRep(task: Task) {
-    if (isSyntheticTask(task)) return;
     const def = task.task_definition;
     const last = _current_run_actions[_current_run_actions.length - 1];
     if (last && last.type === "task" && last.task_id === def.id && last.zone_id === def.zone_id) {
@@ -2333,9 +2339,10 @@ function recordPerformedTaskRep(task: Task) {
     }
 }
 
-// Record an item use (positive amounts only — negatives are undos).
+// Record an item use (positive amounts only — negatives are undos). Suppressed
+// while an artifact task applies its own item, which the task entry covers.
 function recordPerformedItem(item: ItemType, count: number) {
-    if (count <= 0) return;
+    if (_suppress_item_record || count <= 0) return;
     const name = (ITEMS[item] as ItemDefinition | undefined)?.name ?? String(item);
     _current_run_actions.push({ type: "item", name, item, count });
 }
