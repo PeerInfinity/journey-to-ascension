@@ -914,6 +914,9 @@ function doAllTaskRepsForFree(task: Task) {
 }
 
 function applyFinishTaskRepEffects(task: Task) {
+    // Log the performed rep before its effects settle (ordered actions log).
+    recordPerformedTaskRep(task);
+
     if (task.task_definition.item != ItemType.Count) {
         addItem(task.task_definition.item, 1);
     }
@@ -1255,6 +1258,9 @@ export function calcEnergyDrainPerTick(task: Task, is_single_tick: boolean): num
 }
 
 function doAnyReset() {
+    // Both energy reset and prestige funnel through here — snapshot the run's
+    // performed actions before the fresh run begins.
+    snapshotRunActions();
     GAMESTATE.current_zone = 0;
     resetArtifactTaskCycleState();
     resetTasks();
@@ -1394,6 +1400,7 @@ function consumeItem(item: ItemType, amount: number ) {
 
 function useItem(item: ItemType, amount: number) {
     consumeItem(item, amount);
+    recordPerformedItem(item, amount);
     const old_use_value = GAMESTATE.used_items.get(item) ?? 0;
     const definition = ITEMS[item] as ItemDefinition;
     definition.applyEffects(amount);
@@ -2282,6 +2289,62 @@ function recordRunTaskHistory(task: Task) {
     }
     // A task can rep several times a run; keep its best Ring opportunity.
     record.extra_levels_if_ringed = Math.max(record.extra_levels_if_ringed, extra);
+}
+
+// ── Performed-actions log ────────────────────────────────────────────────
+// An ORDERED record of what actually ran during a run — every task rep and
+// item use, in sequence — snapshotted at each reset so tooling can read back
+// "what did the last run do" (and reconstruct it as an action script). This is
+// distinct from run_task_history above, which is a deduped, unordered,
+// skill-only set kept for Magic Ring planning. Module-level + session-transient
+// on purpose: it is observational (never feeds the simulation) and stays out of
+// the save blob, so it is byte-inert to both the tick loop and saved games.
+
+export interface PerformedAction {
+    type: "task" | "item";
+    name: string;
+    // task fields
+    zone_id?: number;
+    task_id?: number;
+    reps?: number;
+    // item fields
+    item?: ItemType;
+    count?: number;
+}
+
+let _current_run_actions: PerformedAction[] = [];
+let _previous_run_actions: PerformedAction[] = [];
+
+// Record one completed rep of a task. Consecutive reps of the same task
+// coalesce into a single entry (a run rarely interleaves tasks rep-by-rep),
+// yielding a compact ordered script. Synthetic tasks (host-injected exit tasks,
+// artifact tasks) are skipped — they are substrate/UI machinery, not player
+// actions to replay.
+function recordPerformedTaskRep(task: Task) {
+    if (isSyntheticTask(task)) return;
+    const def = task.task_definition;
+    const last = _current_run_actions[_current_run_actions.length - 1];
+    if (last && last.type === "task" && last.task_id === def.id && last.zone_id === def.zone_id) {
+        last.reps = (last.reps ?? 0) + 1;
+    } else {
+        _current_run_actions.push({
+            type: "task", name: def.name, zone_id: def.zone_id, task_id: def.id, reps: 1,
+        });
+    }
+}
+
+// Record an item use (positive amounts only — negatives are undos).
+function recordPerformedItem(item: ItemType, count: number) {
+    if (count <= 0) return;
+    const name = (ITEMS[item] as ItemDefinition | undefined)?.name ?? String(item);
+    _current_run_actions.push({ type: "item", name, item, count });
+}
+
+// End of a run (energy reset or prestige, both via doAnyReset): the actions
+// just performed become "the previous run".
+function snapshotRunActions() {
+    _previous_run_actions = _current_run_actions;
+    _current_run_actions = [];
 }
 
 // Under queue cycling or the auto-use cycle, consecutive runs execute
@@ -4502,6 +4565,17 @@ export function updateGamestate() {
         })),
     }));
 };
+
+// Ordered log of the actions performed during the PREVIOUS run (the run that
+// ended at the last reset) — every task rep and item use, in sequence.
+// Read-only; session-transient (empty until the first reset, and after a
+// reload). Returns a shallow copy so callers can't mutate the log.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).getPreviousRunActions = () => _previous_run_actions.map(a => ({ ...a }));
+
+// The same log for the CURRENT (in-progress) run, for live inspection.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).getCurrentRunActions = () => _current_run_actions.map(a => ({ ...a }));
 
 // Set energy directly (for testing / substrate sync).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

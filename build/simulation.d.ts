@@ -125,6 +125,15 @@ export interface RunTaskRecord {
     extra_levels_if_ringed: number;
     completed: boolean;
 }
+export interface PerformedAction {
+    type: "task" | "item";
+    name: string;
+    zone_id?: number;
+    task_id?: number;
+    reps?: number;
+    item?: ItemType;
+    count?: number;
+}
 export type ThresholdCategory = "perk_affordable" | "perk_unaffordable" | "unlocker" | "combat" | "item" | "prestige" | "progression" | "other";
 export declare const THRESHOLD_METRIC_LEVEL = 0;
 export declare const THRESHOLD_METRIC_REP = 1;
