@@ -4184,6 +4184,39 @@ window.grantPerk = (perk) => {
     tryAddPerk(type);
     return { success: true, perk: type, alreadyHad: false };
 };
+// Grant a consumable item from outside a task completion — the arrival
+// path for a cross-substrate item grant. Mirrors grantPerk: accepts an
+// ItemType number or an item display name (matched against
+// ITEMS[].name, so dataset-renamed items resolve). Unlike perks, item
+// grants ACCUMULATE — repeated grants add to the count, by design.
+// Artifacts are rejected: they are behavior-slotted and not portable.
+// Deposits via addItem, the game's single award path, so
+// items_found_this_energy_reset, the render event, and the
+// energy-reset keep formula all apply to granted items natively.
+// Returns {success, item?, count?, newCount?, error?}.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.grantItem = (item, count = 1) => {
+    let type;
+    if (typeof item === "number") {
+        type = item;
+    }
+    else if (typeof item === "string") {
+        const match = ITEMS.find((def) => def && def.name === item);
+        type = match?.enum;
+    }
+    if (type === undefined || type === ItemType.Count
+        || type < 0 || type >= ItemType.Count) {
+        return { success: false, error: `Unknown item: ${JSON.stringify(item)}` };
+    }
+    if (ARTIFACTS.includes(type)) {
+        return { success: false, error: `Item is an artifact (not grantable): ${JSON.stringify(item)}` };
+    }
+    if (!Number.isInteger(count) || count <= 0) {
+        return { success: false, error: `count must be a positive integer: ${JSON.stringify(count)}` };
+    }
+    addItem(type, count);
+    return { success: true, item: type, count, newCount: GAMESTATE.items.get(type) ?? 0 };
+};
 // Field-level patch of existing zone task definitions, by task id. The
 // Tier-1 delivery mechanism for the randomizer/balancer: cost/xp/max_reps
 // costing patches and perk/item re-assignment ride each region's sidecar
