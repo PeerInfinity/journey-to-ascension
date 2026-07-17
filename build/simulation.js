@@ -79,7 +79,7 @@ const DEFAULT_TICK_RATE = 66.6;
 // upstream's save version. The Changelog popup checks SAVE_VERSION against the
 // newest CHANGELOG entry, so keep this equal to CHANGELOG[0].version — bump both
 // together when adding a fork changelog entry.
-export const SAVE_VERSION = "Fork 1.8";
+export const SAVE_VERSION = "Fork 1.9";
 const TASK_STARTED_PROGRESS = 0.01;
 // MARK: Dataset-tunable data tables (fork addition)
 //
@@ -126,6 +126,28 @@ export const PRESTIGE_DATA = {
     // engine's only hardcoded task-id list, now data.
     sbtv_unlock_task_ids: [17, 28, 88, 158, 209],
 };
+// Declarative effect handler tables (the Phase-D effects migration): behavior
+// keys move one at a time from compiled enum-identity branches to dataset
+// `effects[]` entries. Each migrated kind gets a runtime table here with the
+// vanilla values as defaults; loadGameData rebuilds the table from the
+// dataset. With no dataset loaded nothing writes these, so every reader
+// behaves exactly as the compiled branches it replaced.
+export const EFFECTS = {
+    // xp_all_mult, scope "run": an all-skill XP multiplier active while the
+    // perk at pair[0] is held. Applied in ascending perk-index order at the
+    // calcSkillXp position the compiled Writing / GazedBeyondTheVeil
+    // branches occupied — order and chain position are load-bearing for
+    // byte-identity (float multiplication is not associative). The prestige
+    // scope (DivineInspiration / UnparalleledLearning) has NOT migrated:
+    // those unlocks each carry a second non-XP branch (attunement double,
+    // spark double), and their XP multipliers sit split around the
+    // repeatable multipliers in the chain, so they stay compiled until the
+    // attunement/spark kinds migrate.
+    xp_all_mult_run: [
+        [PerkType.Writing, 1.5],
+        [PerkType.GazedBeyondTheVeil, 2],
+    ],
+};
 // Identity of the dataset loaded via window.loadGameData; null = the built-in
 // vanilla tables. Keys the save slot (see getSaveLocation) and stamps the
 // save blob, because numeric task/perk/item/skill ids are save-load-bearing —
@@ -162,11 +184,10 @@ export function calcSkillXp(task, task_progress, ignore_boost = false) {
     const raw = ECONOMY.value_mode == "raw" && task.task_definition.raw_xp !== undefined;
     const xp_mult = raw ? 1 : ECONOMY.xp_base;
     let xp = task_progress * xp_mult * task.task_definition.xp_mult;
-    if (hasPerk(PerkType.Writing)) {
-        xp *= 1.5;
-    }
-    if (hasPerk(PerkType.GazedBeyondTheVeil)) {
-        xp *= 2;
+    for (const [perk, mult] of EFFECTS.xp_all_mult_run) {
+        if (hasPerk(perk)) {
+            xp *= mult;
+        }
     }
     if (hasPrestigeUnlock(PrestigeUnlockType.DivineInspiration)) {
         xp *= 1.5;

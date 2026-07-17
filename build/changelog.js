@@ -5,6 +5,11 @@ export class ChangelogEntry {
 }
 export const CHANGELOG = [
     {
+        version: "Fork 1.9",
+        date: "2026-07-16",
+        changes: "- First step of the declarative-effects migration: the all-skill XP multiplier granted by a held perk (vanilla: How to Write ×1.5, Gazed Beyond the Veil ×2) is now a dataset effect (xp_all_mult, scope \"run\") read from a runtime handler table instead of two compiled perk checks, so loaded datasets can place it on any perk with any magnitude. Vanilla defaults are unchanged and standalone play is byte-identical; the prestige-side XP multipliers (Divine Inspiration, Unparalleled Learning) are not affected"
+    },
+    {
         version: "Fork 1.8",
         date: "2026-07-11",
         changes: "- Datasets loaded through the synthetic game data boundary can now use a raw-value economy (economy.value_mode: \"raw\"): every task carries an absolute base cost and XP rate and every zone carries its speedup/drain factor, instead of deriving them from the zone-indexed exponential formulas. Multiplier-style patch levers (cost_multiplier, xp_mult) keep working on top of the raw values. Without a dataset — or with a formula-mode dataset — nothing changes<br>"

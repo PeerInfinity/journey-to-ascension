@@ -4,6 +4,8 @@ interface DsEffect {
     skill?: number;
     add?: number;
     base_amount?: number;
+    mult?: number;
+    scope?: string;
 }
 interface DsRosterEntry {
     placeholder?: boolean;

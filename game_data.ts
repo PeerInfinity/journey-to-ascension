@@ -35,7 +35,7 @@ import {
 import { ZONES, TaskDefinition, TaskType, rebuildZoneDerivedMaps } from "./zones.js";
 import { PerkSkillModifierList, ItemSkillModifierList } from "./modifiers.js";
 import {
-    calcItemEnergyGain, ECONOMY, SKILL_ROLES, PRESTIGE_DATA,
+    calcItemEnergyGain, ECONOMY, SKILL_ROLES, PRESTIGE_DATA, EFFECTS,
     setLoadedDataset, getLoadedDatasetId,
 } from "./simulation.js";
 import { ENERGY_TEXT } from "./rendering_constants.js";
@@ -49,6 +49,8 @@ interface DsEffect {
     skill?: number;
     add?: number;
     base_amount?: number;
+    mult?: number;
+    scope?: string;
 }
 
 interface DsRosterEntry {
@@ -162,8 +164,9 @@ const PERK_BEHAVIOR_SLOTS: Record<string, number> = {
     time_compression_major: PerkType.MajorTimeCompression,
     speed_per_completed_zone: PerkType.UnifiedTheoryOfMagic,
     keep_items_on_reset: PerkType.UnderstandingTheReset,
-    xp_all_mult_a: PerkType.Writing,
-    xp_all_mult_b: PerkType.GazedBeyondTheVeil,
+    // xp_all_mult_a/_b (Writing / GazedBeyondTheVeil) migrated to the
+    // declarative xp_all_mult effect kind (Phase-D rung 1) — those slots
+    // are no longer behavior-constrained.
     spark_gain_mult_b: PerkType.DefiedTheGods,
     attunement_gain_mult: PerkType.CommunedWithDamnedSouls,
     item_energy_mult: PerkType.SupplyLines,
@@ -289,6 +292,19 @@ export function validateGameDataset(dataset: unknown): string[] {
                 } else if (e?.kind === "energy_on_consume") {
                     if (!(typeof e.base_amount === "number" && e.base_amount > 0)) {
                         err(`${where} energy_on_consume effect: base_amount must be a positive number`);
+                    }
+                } else if (e?.kind === "xp_all_mult") {
+                    // Phase-D rung 1: run scope on perk entries only. The
+                    // prestige scope stays a compiled behavior until the
+                    // attunement/spark kinds migrate (see EFFECTS).
+                    if (label !== "perks") {
+                        err(`${where} xp_all_mult effect: only perk entries may carry it`);
+                    }
+                    if (!(typeof e.mult === "number" && Number.isFinite(e.mult) && e.mult > 0)) {
+                        err(`${where} xp_all_mult effect: mult must be a positive finite number`);
+                    }
+                    if (e.scope !== "run") {
+                        err(`${where} xp_all_mult effect: scope must be "run" (prestige scope not yet migrated)`);
                     }
                 } else {
                     err(`${where} has an effect of unknown kind ${JSON.stringify(e?.kind)}`);
@@ -666,6 +682,22 @@ function applyRolesAndEconomy(ds: JtaDataset) {
     ECONOMY.value_mode = economy["value_mode"] === "raw" ? "raw" : "zone_formula";
 }
 
+// Rebuild the declarative effect handler tables (simulation.ts EFFECTS) from
+// the dataset roster — the Phase-D migration seam. Rebuilt wholesale on every
+// load: entries in ascending perk-index order, matching the vanilla defaults'
+// application order.
+function applyEffects(ds: JtaDataset) {
+    const xp_all_mult_run: [PerkType, number][] = [];
+    (ds.perks as DsRosterEntry[]).forEach((entry, i) => {
+        for (const e of entry.effects ?? []) {
+            if (e.kind === "xp_all_mult") {
+                xp_all_mult_run.push([i as PerkType, e.mult as number]);
+            }
+        }
+    });
+    EFFECTS.xp_all_mult_run = xp_all_mult_run;
+}
+
 // Validate, then swap every content table atomically (validation is complete
 // before the first mutation — a failing dataset changes nothing). Idempotent
 // per dataset_id. The caller re-initializes the game after a real swap.
@@ -685,6 +717,7 @@ export function applyGameDataset(dataset: unknown): { ok: boolean; alreadyLoaded
     swapPrestigeTables(ds);
     swapZoneTables(ds);
     applyRolesAndEconomy(ds);
+    applyEffects(ds);
     setLoadedDataset(ds.dataset_id as string, ds.schema_version as number);
     return { ok: true, alreadyLoaded: false };
 }
