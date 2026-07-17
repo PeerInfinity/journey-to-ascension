@@ -7,7 +7,8 @@ export const CHANGELOG = [
     {
         version: "Fork 1.10",
         date: "2026-07-16",
-        changes: "- Second step of the declarative-effects migration: the perk-granted starting-energy bonuses are now dataset effects (starting_energy, scope \"run\") read from runtime handler tables instead of compiled perk checks — the one-time +50 max Energy on gaining Energetic Spell (flat variant) and Energetic Memory's per-Energy-Reset growth (per_reset variant, curve \"linear\"), so loaded datasets can place either on any perk with any magnitude. Vanilla defaults are unchanged and standalone play is byte-identical; the prestige-side starting-energy upgrades (Transcendant Memory's squaring, Divine Supremacy's flat bonus, Energized) are not affected"
+        changes: "- Second step of the declarative-effects migration: the perk-granted starting-energy bonuses are now dataset effects (starting_energy, scope \"run\") read from runtime handler tables instead of compiled perk checks — the one-time +50 max Energy on gaining Energetic Spell (flat variant) and Energetic Memory's per-Energy-Reset growth (per_reset variant, curve \"linear\"), so loaded datasets can place either on any perk with any magnitude. Vanilla defaults are unchanged and standalone play is byte-identical; the prestige-side starting-energy upgrades (Transcendant Memory's squaring, Divine Supremacy's flat bonus, Energized) are not affected<br>"
+            + "- Standalone pages can now boot into a synthetic dataset with ?dataset=<url>: the document is fetched after the normal bootstrap, validated, and loaded through the same path as window.loadGameData (dataset-keyed save slot, so vanilla and dataset saves never touch each other). Fetch/validation failures keep the vanilla game and report the error. Without the parameter nothing changes"
     },
     {
         version: "Fork 1.9",

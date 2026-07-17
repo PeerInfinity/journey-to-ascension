@@ -1,5 +1,5 @@
 import { handleHotkeyPressed, handleHotkeyReleased, Rendering, updateRendering, updateSettingsDisplay, setupControls, populatePrestigeView } from "./rendering.js";
-import { Gamestate, saveGame, updateGamestate, resetTasks, calcTickRate, isManagedMode, getMods, getMod, setMod, type GameMods } from "./simulation.js";
+import { Gamestate, saveGame, updateGamestate, resetTasks, calcTickRate, isManagedMode, getMods, getMod, setMod, getLoadedDatasetId, type GameMods } from "./simulation.js";
 import { applyGameDataset } from "./game_data.js";
 
 function gameLoop() {
@@ -55,7 +55,52 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!isManagedMode()) {
         setTickRate();
     }
+
+    maybeLoadDatasetFromUrl();
 });
+
+// Standalone `?dataset=<url>` boot (synthetic-data rider D-a): fetch a
+// dataset document and load it through window.loadGameData after the normal
+// bootstrap — the hook validates, swaps tables, and re-initializes against
+// the dataset-keyed save slot, so the brief vanilla boot never touches the
+// dataset's save. Standalone only: in managed mode the substrate host owns
+// dataset loading (the bridge applies the world's dataset on region load).
+// Without the param this is a single URLSearchParams check — byte-inert.
+function maybeLoadDatasetFromUrl() {
+    if (isManagedMode()) {
+        return;
+    }
+    const url = new URLSearchParams(window.location.search).get("dataset");
+    if (!url) {
+        return;
+    }
+    void (async () => {
+        let failure: string;
+        try {
+            const res = await fetch(url);
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status} ${res.statusText}`);
+            }
+            const doc: unknown = await res.json();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const result = (window as any).loadGameData(doc) as { ok: boolean; errors?: string[] };
+            if (result.ok) {
+                console.log(`?dataset=: loaded ${getLoadedDatasetId()} from ${url}`);
+                return;
+            }
+            failure = (result.errors ?? []).slice(0, 5).join("\n");
+        } catch (e) {
+            failure = e instanceof Error ? e.message : String(e);
+        }
+        console.error(`?dataset=: failed to load ${url}:\n${failure}`);
+        alert(`Failed to load dataset from ${url}:\n\n${failure}`);
+    })();
+}
+
+// Identity of the loaded dataset (null = built-in vanilla tables) — lets
+// hosts and the ?dataset= boot verify observe which content is live.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).getLoadedDatasetId = getLoadedDatasetId;
 
 document.addEventListener("keyup", handleHotkeyReleased);
 document.addEventListener("keydown", handleHotkeyPressed);
