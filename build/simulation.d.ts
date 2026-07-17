@@ -5,7 +5,7 @@ import { RenderEvent } from "./events.js";
 import { SkillType } from "./skills.js";
 import { PrestigeRepeatableType, PrestigeUnlockType, PrestigeLayer } from "./prestige_upgrades.js";
 export declare function isManagedMode(): boolean;
-export declare const SAVE_VERSION = "Fork 1.9";
+export declare const SAVE_VERSION = "Fork 1.10";
 export declare const SKILL_ROLES: {
     ascension_skill: SkillType;
     travel_skill: SkillType;
@@ -29,6 +29,8 @@ export declare const PRESTIGE_DATA: {
 };
 export declare const EFFECTS: {
     xp_all_mult_run: [PerkType, number][];
+    starting_energy_flat_run: [PerkType, number][];
+    starting_energy_growth_run: [PerkType, number][];
 };
 export declare function setLoadedDataset(id: string, schema_version: number): void;
 export declare function getLoadedDatasetId(): string | null;

@@ -79,7 +79,7 @@ const DEFAULT_TICK_RATE = 66.6;
 // upstream's save version. The Changelog popup checks SAVE_VERSION against the
 // newest CHANGELOG entry, so keep this equal to CHANGELOG[0].version — bump both
 // together when adding a fork changelog entry.
-export const SAVE_VERSION = "Fork 1.9";
+export const SAVE_VERSION = "Fork 1.10";
 const TASK_STARTED_PROGRESS = 0.01;
 // MARK: Dataset-tunable data tables (fork addition)
 //
@@ -146,6 +146,27 @@ export const EFFECTS = {
     xp_all_mult_run: [
         [PerkType.Writing, 1.5],
         [PerkType.GazedBeyondTheVeil, 2],
+    ],
+    // starting_energy flat variant, scope "run": +flat max energy applied
+    // once when the perk at pair[0] is granted (the tryAddPerk position the
+    // compiled EnergySpell branch occupied). Wiped with perks on prestige;
+    // re-granting the perk re-applies it, exactly like vanilla EnergySpell.
+    starting_energy_flat_run: [
+        [PerkType.EnergySpell, 50],
+    ],
+    // starting_energy per-reset variant, scope "run", curve "linear": on
+    // every energy reset, max energy grows by (current_zone + 1) * per_reset
+    // while the perk at pair[0] is held (the calcEnergeticMemoryGain base
+    // term the compiled EnergeticMemory branch computed). The Transcendant
+    // Memory square (curve "square" is reserved for it) and the Energized
+    // level multiplier stay compiled modifiers layered on this gain — both
+    // are prestige-side keys entangled with other engine branches
+    // (TranscendantMemory also auto-grants the perk at slot 19;
+    // DivineSupremacy's flat also multiplies mandatoryish task speed and
+    // doubles spark), so the prestige-side starting-energy keys stay
+    // slotted, exactly like the rung-1 prestige XP pair.
+    starting_energy_growth_run: [
+        [PerkType.EnergeticMemory, ENERGETIC_MEMORY_MULT],
     ],
 };
 // Identity of the dataset loaded via window.loadGameData; null = the built-in
@@ -1105,10 +1126,19 @@ function doAnyReset() {
     removeTemporarySkillBonuses();
 }
 function calcEnergeticMemoryGain() {
-    if (!hasPerk(PerkType.EnergeticMemory)) {
+    // Sum the per-reset growth effects of held perks (vanilla: exactly one,
+    // EnergeticMemory — 0 + x is bit-exact x, so the single-entry default
+    // reproduces the compiled branch). The square below applies to the
+    // TOTAL gain when several perks carry the effect.
+    let energy_gain = 0;
+    for (const [perk, per_reset] of EFFECTS.starting_energy_growth_run) {
+        if (hasPerk(perk)) {
+            energy_gain += (GAMESTATE.current_zone + 1) * per_reset;
+        }
+    }
+    if (energy_gain == 0) {
         return 0;
     }
-    let energy_gain = (GAMESTATE.current_zone + 1) * ENERGETIC_MEMORY_MULT;
     if (energy_gain > 1 && hasPrestigeUnlock(PrestigeUnlockType.TranscendantMemory)) {
         energy_gain *= energy_gain;
     }
@@ -1767,8 +1797,10 @@ function tryAddPerk(perk, show_notification = true) {
     if (hasPerk(perk)) {
         return;
     }
-    if (perk == PerkType.EnergySpell) {
-        modifyMaxEnergy(50);
+    for (const [effect_perk, flat] of EFFECTS.starting_energy_flat_run) {
+        if (perk == effect_perk) {
+            modifyMaxEnergy(flat);
+        }
     }
     GAMESTATE.perks.set(perk, true);
     if (show_notification) {

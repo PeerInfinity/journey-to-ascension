@@ -6,6 +6,11 @@ export class ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
+        version: "Fork 1.10",
+        date: "2026-07-16",
+        changes: "- Second step of the declarative-effects migration: the perk-granted starting-energy bonuses are now dataset effects (starting_energy, scope \"run\") read from runtime handler tables instead of compiled perk checks — the one-time +50 max Energy on gaining Energetic Spell (flat variant) and Energetic Memory's per-Energy-Reset growth (per_reset variant, curve \"linear\"), so loaded datasets can place either on any perk with any magnitude. Vanilla defaults are unchanged and standalone play is byte-identical; the prestige-side starting-energy upgrades (Transcendant Memory's squaring, Divine Supremacy's flat bonus, Energized) are not affected"
+    },
+    {
         version: "Fork 1.9",
         date: "2026-07-16",
         changes: "- First step of the declarative-effects migration: the all-skill XP multiplier granted by a held perk (vanilla: How to Write ×1.5, Gazed Beyond the Veil ×2) is now a dataset effect (xp_all_mult, scope \"run\") read from a runtime handler table instead of two compiled perk checks, so loaded datasets can place it on any perk with any magnitude. Vanilla defaults are unchanged and standalone play is byte-identical; the prestige-side XP multipliers (Divine Inspiration, Unparalleled Learning) are not affected"

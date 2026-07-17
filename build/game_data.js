@@ -40,12 +40,13 @@ export const JTA_DATASET_SCHEMA_VERSION = 1;
 // stay correct across dataset swaps that change only `Count`.
 const PERK_BEHAVIOR_SLOTS = {
     automation_unlock: PerkType.Amulet,
-    starting_energy_flat: PerkType.EnergySpell,
+    // starting_energy_flat (EnergySpell) / starting_energy_growth
+    // (EnergeticMemory) migrated to the declarative starting_energy effect
+    // kind (Phase-D rung 2) — those slots are no longer behavior-constrained.
     time_compression_minor: PerkType.MinorTimeCompression,
     energy_drain_reduction: PerkType.HighAltitudeClimbing,
     attunement_enable: PerkType.Attunement,
     energy_drain_zone_history: PerkType.ReflectionsOnTheJourney,
-    starting_energy_growth: PerkType.EnergeticMemory,
     spark_gain_mult_a: PerkType.Awakening,
     time_compression_major: PerkType.MajorTimeCompression,
     speed_per_completed_zone: PerkType.UnifiedTheoryOfMagic,
@@ -189,6 +190,43 @@ export function validateGameDataset(dataset) {
                     }
                     if (e.scope !== "run") {
                         err(`${where} xp_all_mult effect: scope must be "run" (prestige scope not yet migrated)`);
+                    }
+                }
+                else if (e?.kind === "starting_energy") {
+                    // Phase-D rung 2: run scope on perk entries only, one of
+                    // {flat} (applied once on perk grant) or {per_reset,
+                    // curve "linear"} (per-energy-reset growth). The
+                    // prestige-side starting-energy keys (TranscendantMemory
+                    // square, DivineSupremacy flat) stay compiled behaviors
+                    // — impure, entangled with other engine branches (see
+                    // EFFECTS) — so scope "prestige" and curve "square" are
+                    // reserved.
+                    if (label !== "perks") {
+                        err(`${where} starting_energy effect: only perk entries may carry it`);
+                    }
+                    const hasFlat = e.flat !== undefined;
+                    const hasGrowth = e.per_reset !== undefined;
+                    if (hasFlat === hasGrowth) {
+                        err(`${where} starting_energy effect: exactly one of flat / per_reset is required`);
+                    }
+                    else if (hasFlat) {
+                        if (!(typeof e.flat === "number" && Number.isFinite(e.flat) && e.flat > 0)) {
+                            err(`${where} starting_energy effect: flat must be a positive finite number`);
+                        }
+                        if (e.curve !== undefined) {
+                            err(`${where} starting_energy effect: curve only applies to the per_reset variant`);
+                        }
+                    }
+                    else {
+                        if (!(typeof e.per_reset === "number" && Number.isFinite(e.per_reset) && e.per_reset > 0)) {
+                            err(`${where} starting_energy effect: per_reset must be a positive finite number`);
+                        }
+                        if (e.curve !== undefined && e.curve !== "linear") {
+                            err(`${where} starting_energy effect: curve must be "linear" ("square" is the compiled TranscendantMemory modifier, not yet migrated)`);
+                        }
+                    }
+                    if (e.scope !== "run") {
+                        err(`${where} starting_energy effect: scope must be "run" (prestige scope not yet migrated)`);
                     }
                 }
                 else {
@@ -585,14 +623,26 @@ function applyRolesAndEconomy(ds) {
 // application order.
 function applyEffects(ds) {
     const xp_all_mult_run = [];
+    const starting_energy_flat_run = [];
+    const starting_energy_growth_run = [];
     ds.perks.forEach((entry, i) => {
         for (const e of entry.effects ?? []) {
             if (e.kind === "xp_all_mult") {
                 xp_all_mult_run.push([i, e.mult]);
             }
+            else if (e.kind === "starting_energy") {
+                if (e.flat !== undefined) {
+                    starting_energy_flat_run.push([i, e.flat]);
+                }
+                else {
+                    starting_energy_growth_run.push([i, e.per_reset]);
+                }
+            }
         }
     });
     EFFECTS.xp_all_mult_run = xp_all_mult_run;
+    EFFECTS.starting_energy_flat_run = starting_energy_flat_run;
+    EFFECTS.starting_energy_growth_run = starting_energy_growth_run;
 }
 // Validate, then swap every content table atomically (validation is complete
 // before the first mutation — a failing dataset changes nothing). Idempotent

@@ -5,6 +5,9 @@ interface DsEffect {
     add?: number;
     base_amount?: number;
     mult?: number;
+    flat?: number;
+    per_reset?: number;
+    curve?: string;
     scope?: string;
 }
 interface DsRosterEntry {
