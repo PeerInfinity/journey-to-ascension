@@ -54,6 +54,7 @@ interface DsEffect {
     per_reset?: number;
     curve?: string;
     scope?: string;
+    single_tick_drain_mult?: number;
 }
 
 interface DsRosterEntry {
@@ -160,12 +161,16 @@ const PERK_BEHAVIOR_SLOTS: Record<string, number> = {
     // starting_energy_flat (EnergySpell) / starting_energy_growth
     // (EnergeticMemory) migrated to the declarative starting_energy effect
     // kind (Phase-D rung 2) — those slots are no longer behavior-constrained.
-    time_compression_minor: PerkType.MinorTimeCompression,
+    // time_compression_minor (MinorTimeCompression) / time_compression_major
+    // (MajorTimeCompression) migrated to the declarative time_compression
+    // effect kind (Phase-D rung 3) — those slots are no longer
+    // behavior-constrained. NOTE the residual coupling: the still-slotted
+    // MasteryOfTime prestige unlock auto-grants PERK SLOTS 7 and 23 by enum
+    // identity, whatever a dataset placed there.
     energy_drain_reduction: PerkType.HighAltitudeClimbing,
     attunement_enable: PerkType.Attunement,
     energy_drain_zone_history: PerkType.ReflectionsOnTheJourney,
     spark_gain_mult_a: PerkType.Awakening,
-    time_compression_major: PerkType.MajorTimeCompression,
     speed_per_completed_zone: PerkType.UnifiedTheoryOfMagic,
     keep_items_on_reset: PerkType.UnderstandingTheReset,
     // xp_all_mult_a/_b (Writing / GazedBeyondTheVeil) migrated to the
@@ -343,6 +348,36 @@ export function validateGameDataset(dataset: unknown): string[] {
                     }
                     if (e.scope !== "run") {
                         err(`${where} starting_energy effect: scope must be "run" (prestige scope not yet migrated)`);
+                    }
+                } else if (e?.kind === "time_compression") {
+                    // Phase-D rung 3: run scope on perk entries only, one of
+                    // {mult} (scale variant: task speed and zone drain
+                    // ×mult with single-tick compensation, plus single-tick
+                    // tasks complete all reps in one tick) or
+                    // {single_tick_drain_mult} (single-tick tasks drain
+                    // ×value, plus free zones are auto-skipped on reset).
+                    // The feature unlocks are declared variant semantics,
+                    // not separate fields. MasteryOfTime (which auto-grants
+                    // perk slots 7/23 and zeroes single-tick drain) stays a
+                    // compiled prestige behavior.
+                    if (label !== "perks") {
+                        err(`${where} time_compression effect: only perk entries may carry it`);
+                    }
+                    const hasScale = e.mult !== undefined;
+                    const hasSingleTick = e.single_tick_drain_mult !== undefined;
+                    if (hasScale === hasSingleTick) {
+                        err(`${where} time_compression effect: exactly one of mult / single_tick_drain_mult is required`);
+                    } else if (hasScale) {
+                        if (!(typeof e.mult === "number" && Number.isFinite(e.mult) && e.mult > 0)) {
+                            err(`${where} time_compression effect: mult must be a positive finite number`);
+                        }
+                    } else {
+                        if (!(typeof e.single_tick_drain_mult === "number" && Number.isFinite(e.single_tick_drain_mult) && e.single_tick_drain_mult > 0)) {
+                            err(`${where} time_compression effect: single_tick_drain_mult must be a positive finite number`);
+                        }
+                    }
+                    if (e.scope !== "run") {
+                        err(`${where} time_compression effect: scope must be "run"`);
                     }
                 } else {
                     err(`${where} has an effect of unknown kind ${JSON.stringify(e?.kind)}`);
@@ -728,6 +763,8 @@ function applyEffects(ds: JtaDataset) {
     const xp_all_mult_run: [PerkType, number][] = [];
     const starting_energy_flat_run: [PerkType, number][] = [];
     const starting_energy_growth_run: [PerkType, number][] = [];
+    const time_compression_scale_run: [PerkType, number][] = [];
+    const time_compression_single_tick_run: [PerkType, number][] = [];
     (ds.perks as DsRosterEntry[]).forEach((entry, i) => {
         for (const e of entry.effects ?? []) {
             if (e.kind === "xp_all_mult") {
@@ -738,12 +775,20 @@ function applyEffects(ds: JtaDataset) {
                 } else {
                     starting_energy_growth_run.push([i as PerkType, e.per_reset as number]);
                 }
+            } else if (e.kind === "time_compression") {
+                if (e.mult !== undefined) {
+                    time_compression_scale_run.push([i as PerkType, e.mult as number]);
+                } else {
+                    time_compression_single_tick_run.push([i as PerkType, e.single_tick_drain_mult as number]);
+                }
             }
         }
     });
     EFFECTS.xp_all_mult_run = xp_all_mult_run;
     EFFECTS.starting_energy_flat_run = starting_energy_flat_run;
     EFFECTS.starting_energy_growth_run = starting_energy_growth_run;
+    EFFECTS.time_compression_scale_run = time_compression_scale_run;
+    EFFECTS.time_compression_single_tick_run = time_compression_single_tick_run;
 }
 
 // Validate, then swap every content table atomically (validation is complete

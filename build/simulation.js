@@ -79,7 +79,7 @@ const DEFAULT_TICK_RATE = 66.6;
 // upstream's save version. The Changelog popup checks SAVE_VERSION against the
 // newest CHANGELOG entry, so keep this equal to CHANGELOG[0].version — bump both
 // together when adding a fork changelog entry.
-export const SAVE_VERSION = "Fork 1.10";
+export const SAVE_VERSION = "Fork 1.11";
 const TASK_STARTED_PROGRESS = 0.01;
 // MARK: Dataset-tunable data tables (fork addition)
 //
@@ -168,7 +168,62 @@ export const EFFECTS = {
     starting_energy_growth_run: [
         [PerkType.EnergeticMemory, ENERGETIC_MEMORY_MULT],
     ],
+    // time_compression scale variant, scope "run": while the perk at pair[0]
+    // is held, task speed AND zone energy drain are multiplied by pair[1]
+    // (the cancellation pair — energy per task is unchanged, wall-clock time
+    // divides), single-tick drain is compensated back down (÷ pair[1], the
+    // calcEnergyDrainPerTick position), and single-tick tasks complete ALL
+    // their reps in one tick. The all-reps semantics is part of the variant's
+    // declared behavior, not a separate flag — it is what the compiled
+    // MajorTimeCompression branches meant by "time compression". With several
+    // carriers the mults multiply (ascending perk-index order; order and
+    // chain positions are load-bearing for byte-identity) and all-reps fires
+    // if any carrier is held.
+    time_compression_scale_run: [
+        [PerkType.MajorTimeCompression, MAJOR_TIME_COMPRESSION_EFFECT],
+    ],
+    // time_compression single-tick variant, scope "run": while the perk at
+    // pair[0] is held, single-tick tasks drain ×pair[1] energy (the compiled
+    // MinorTimeCompression ×0.2 branch position), and zones whose remaining
+    // tasks are all free are skipped automatically on energy reset
+    // (skipFreeZones — the feature unlock is part of the variant's declared
+    // behavior). Multiple carriers: drain mults multiply, the zone skip
+    // fires if any carrier is held.
+    time_compression_single_tick_run: [
+        [PerkType.MinorTimeCompression, 0.2],
+    ],
 };
+// Any held carrier of a time_compression scale effect (the compiled
+// hasPerk(MajorTimeCompression) feature gates: all-reps-in-one-tick).
+function hasTimeCompressionScale() {
+    for (const [perk] of EFFECTS.time_compression_scale_run) {
+        if (hasPerk(perk)) {
+            return true;
+        }
+    }
+    return false;
+}
+// Any held carrier of a time_compression single-tick effect (the compiled
+// hasPerk(MinorTimeCompression) feature gate: skipFreeZones).
+function hasTimeCompressionSingleTick() {
+    for (const [perk] of EFFECTS.time_compression_single_tick_run) {
+        if (hasPerk(perk)) {
+            return true;
+        }
+    }
+    return false;
+}
+// The perk credited in the "Skipped to Zone N thanks to ..." message: the
+// first held single-tick carrier (rendering's hardcoded MinorTimeCompression
+// reference, made dataset-aware; identical output on vanilla tables).
+export function getZoneSkipCreditPerk() {
+    for (const [perk] of EFFECTS.time_compression_single_tick_run) {
+        if (hasPerk(perk)) {
+            return perk;
+        }
+    }
+    return EFFECTS.time_compression_single_tick_run[0]?.[0] ?? PerkType.MinorTimeCompression;
+}
 // Identity of the dataset loaded via window.loadGameData; null = the built-in
 // vanilla tables. Keys the save slot (see getSaveLocation) and stamps the
 // save blob, because numeric task/perk/item/skill ids are save-load-bearing —
@@ -419,8 +474,10 @@ export function calcTaskProgressMultiplier(task, override_haste = null, override
         mult *= BOTTLED_LIGHTNING_MULT;
     }
     mult *= calcZoneSpeedupFactor(task.task_definition.zone_id);
-    if (hasPerk(PerkType.MajorTimeCompression)) {
-        mult *= MAJOR_TIME_COMPRESSION_EFFECT;
+    for (const [effect_perk, scale] of EFFECTS.time_compression_scale_run) {
+        if (hasPerk(effect_perk)) {
+            mult *= scale;
+        }
     }
     if (hasPerk(PerkType.UnifiedTheoryOfMagic)) {
         mult *= Math.pow(1 + UNIFIED_THEORY_OF_MAGIC_EFFECT, GAMESTATE.highest_zone_fully_completed + 1);
@@ -459,7 +516,7 @@ function isSingleTickTask(task) {
     return isSingleTickTaskImpl(progress, cost);
 }
 export function willCompleteAllRepsInOneTick(task) {
-    if (!hasPerk(PerkType.MajorTimeCompression)) {
+    if (!hasTimeCompressionScale()) {
         return false;
     }
     return isSingleTickTask(task);
@@ -482,7 +539,7 @@ function progressTask(task, progress, consume_energy = true) {
     else {
         return;
     }
-    if (is_single_tick && hasPerk(PerkType.MajorTimeCompression)) {
+    if (is_single_tick && hasTimeCompressionScale()) {
         while (task.reps < task.task_definition.max_reps) {
             applyFinishTaskRepEffects(task);
             for (const skill of task.task_definition.skills) {
@@ -1082,8 +1139,10 @@ export function calcEnergyDrainPerTickInZone(zone) {
     if (hasPerk(PerkType.ReflectionsOnTheJourney)) {
         drain *= calcReflectionsOnTheJourneyMult(zone);
     }
-    if (hasPerk(PerkType.MajorTimeCompression)) {
-        drain *= MAJOR_TIME_COMPRESSION_EFFECT;
+    for (const [effect_perk, scale] of EFFECTS.time_compression_scale_run) {
+        if (hasPerk(effect_perk)) {
+            drain *= scale;
+        }
     }
     drain *= calcZoneSpeedupFactor(zone);
     return drain;
@@ -1098,12 +1157,20 @@ export function calcEnergyDrainPerTick(task, is_single_tick) {
     if (is_single_tick && hasPrestigeUnlock(PrestigeUnlockType.MasteryOfTime)) {
         return 0;
     }
-    if (is_single_tick && hasPerk(PerkType.MinorTimeCompression)) {
-        drain *= 0.2;
+    if (is_single_tick) {
+        for (const [effect_perk, single_tick_mult] of EFFECTS.time_compression_single_tick_run) {
+            if (hasPerk(effect_perk)) {
+                drain *= single_tick_mult;
+            }
+        }
     }
-    if (is_single_tick && hasPerk(PerkType.MajorTimeCompression)) {
-        // Make up for it always getting applied in calcEnergyDrainPerTickInZone
-        drain /= MAJOR_TIME_COMPRESSION_EFFECT;
+    if (is_single_tick) {
+        for (const [effect_perk, scale] of EFFECTS.time_compression_scale_run) {
+            if (hasPerk(effect_perk)) {
+                // Make up for it always getting applied in calcEnergyDrainPerTickInZone
+                drain /= scale;
+            }
+        }
     }
     return drain;
 }
@@ -1841,7 +1908,7 @@ function skipCurrentZoneIfFree() {
     return GAMESTATE.current_zone !== zone_before;
 }
 function skipFreeZones() {
-    if (!hasPerk(PerkType.MinorTimeCompression)) {
+    if (!hasTimeCompressionSingleTick()) {
         return;
     }
     GAMESTATE.is_in_zone_skip = true;

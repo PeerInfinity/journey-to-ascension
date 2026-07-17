@@ -9,6 +9,7 @@ interface DsEffect {
     per_reset?: number;
     curve?: string;
     scope?: string;
+    single_tick_drain_mult?: number;
 }
 interface DsRosterEntry {
     placeholder?: boolean;

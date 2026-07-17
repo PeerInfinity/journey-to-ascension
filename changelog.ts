@@ -6,6 +6,11 @@ export class ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
+        version: "Fork 1.11",
+        date: "2026-07-16",
+        changes: "- Third step of the declarative-effects migration: both time-compression perks are now dataset effects (time_compression, scope \"run\") read from runtime handler tables instead of compiled perk checks. The scale variant (vanilla: Major Time Compression, mult 1.5) multiplies task speed and zone energy drain, compensates single-tick drain back down, and completes all reps of a single-tick task in one tick; the single-tick variant (vanilla: Minor Time Compression, single_tick_drain_mult 0.2) discounts single-tick drain and auto-skips free zones on energy reset — the feature unlocks travel with their variant, so loaded datasets can place either on any perk with any magnitude. Vanilla defaults are unchanged and standalone play is byte-identical; Mastery of Time (which permanently unlocks both vanilla perk slots) is not affected, and the zone-skip notification now credits whichever perk carries the effect"
+    },
+    {
         version: "Fork 1.10",
         date: "2026-07-16",
         changes: "- Second step of the declarative-effects migration: the perk-granted starting-energy bonuses are now dataset effects (starting_energy, scope \"run\") read from runtime handler tables instead of compiled perk checks — the one-time +50 max Energy on gaining Energetic Spell (flat variant) and Energetic Memory's per-Energy-Reset growth (per_reset variant, curve \"linear\"), so loaded datasets can place either on any perk with any magnitude. Vanilla defaults are unchanged and standalone play is byte-identical; the prestige-side starting-energy upgrades (Transcendant Memory's squaring, Divine Supremacy's flat bonus, Energized) are not affected<br>"
