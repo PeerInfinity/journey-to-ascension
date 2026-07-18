@@ -38,6 +38,13 @@ const _synthetic_task_callbacks = new Map();
 // filter. Pass null to clear. First full completion is the only signal —
 // tasks stay done once at max_reps — so the host dedupes on its side.
 let _task_completion_callback = null;
+// Foreign-award channel (Fork 1.13): fired at the award site when a per-rep
+// item-schedule entry belongs to another substrate. The managed host routes
+// it to the cross-substrate grant bus; with no callback registered
+// (standalone play, headless harnesses, the balance worker) the award is
+// deliberately dropped — the local player receives nothing, which is
+// exactly the semantics the schedule declares.
+let _foreign_award_callback = null;
 // Cost-assignment allowlist (Pass-B balance walk). When non-null, any real
 // (non-synthetic) task whose id is NOT in the set is treated as
 // disabled-without-being-finished, so automation skips past it (the walk runs
@@ -79,7 +86,7 @@ const DEFAULT_TICK_RATE = 66.6;
 // upstream's save version. The Changelog popup checks SAVE_VERSION against the
 // newest CHANGELOG entry, so keep this equal to CHANGELOG[0].version — bump both
 // together when adding a fork changelog entry.
-export const SAVE_VERSION = "Fork 1.11";
+export const SAVE_VERSION = "Fork 1.13";
 const TASK_STARTED_PROGRESS = 0.01;
 // MARK: Dataset-tunable data tables (fork addition)
 //
@@ -889,8 +896,31 @@ function doAllTaskRepsForFree(task) {
 function applyFinishTaskRepEffects(task) {
     // Log the performed rep before its effects settle (ordered actions log).
     recordPerformedTaskRep(task);
-    if (task.task_definition.item != ItemType.Count) {
-        addItem(task.task_definition.item, 1);
+    // Resolve this rep's award. The per-rep schedule (Fork 1.13, dataset
+    // worlds only) overrides the static item; task.reps is the pre-increment
+    // 0-based rep index, so schedule[task.reps] is this rep's entry across
+    // all three callers (normal rep, Mastery-of-Time all-reps loop, batch
+    // remaining-reps loop). A foreign entry awards nothing locally and is
+    // handed to the foreign-award callback instead.
+    let awarded_item = task.task_definition.item;
+    const item_schedule = task.task_definition.item_schedule;
+    if (item_schedule && awarded_item != ItemType.Count) {
+        const entry = item_schedule[task.reps];
+        if (typeof entry === "number") {
+            awarded_item = entry;
+        }
+        else if (entry) {
+            awarded_item = ItemType.Count;
+            if (_foreign_award_callback) {
+                _foreign_award_callback({
+                    taskId: task.task_definition.id, rep: task.reps,
+                    substrate: entry.substrate, type: entry.type, count: entry.count,
+                });
+            }
+        }
+    }
+    if (awarded_item != ItemType.Count) {
+        addItem(awarded_item, 1);
     }
     task.reps += 1;
     if (task.reps < task.task_definition.max_reps) {
@@ -902,8 +932,8 @@ function applyFinishTaskRepEffects(task) {
     addAttunement(calcAttunementGain(task));
     const event = new RenderEvent(EventType.TaskCompleted, {});
     GAMESTATE.queueRenderEvent(event);
-    if (task.task_definition.item != ItemType.Count) {
-        maybeUseRoundingErrorItem(task.task_definition.item);
+    if (awarded_item != ItemType.Count) {
+        maybeUseRoundingErrorItem(awarded_item);
     }
     // Scheduled artifact task: using it is the whole point of the task. The
     // performed-actions log skips the artifact task itself and records this
@@ -4133,6 +4163,11 @@ window.clearSyntheticTasks = () => {
 window.setTaskCompletionCallback = (fn) => {
     _task_completion_callback = fn;
 };
+// Foreign-award subscription (see _foreign_award_callback; Fork 1.13).
+// Pass null to clear.
+window.setForeignAwardCallback = (fn) => {
+    _foreign_award_callback = fn;
+};
 // Set the Pass-B cost-assignment allowlist (see _costed_task_ids). Accepts an
 // array or Set of task ids (copied into a fresh Set for O(1) lookup) or null to
 // clear. Dormant in standalone play — the standalone game never calls it.
@@ -4292,8 +4327,11 @@ window.applyTaskPatches = (patches) => {
         }
         if ('item' in fields) {
             const it = resolveItem(fields.item);
+            // Whole-task item reassignment wins over a per-rep schedule:
+            // the schedule is cleared so every rep awards the patched item.
             if (it !== undefined) {
                 def.item = it;
+                def.item_schedule = undefined;
                 touchedPerkOrItem = true;
             }
         }

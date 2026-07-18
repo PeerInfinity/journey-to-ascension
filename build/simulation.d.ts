@@ -5,7 +5,7 @@ import { RenderEvent } from "./events.js";
 import { SkillType } from "./skills.js";
 import { PrestigeRepeatableType, PrestigeUnlockType, PrestigeLayer } from "./prestige_upgrades.js";
 export declare function isManagedMode(): boolean;
-export declare const SAVE_VERSION = "Fork 1.11";
+export declare const SAVE_VERSION = "Fork 1.13";
 export declare const SKILL_ROLES: {
     ascension_skill: SkillType;
     travel_skill: SkillType;

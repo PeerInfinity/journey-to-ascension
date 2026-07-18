@@ -39,6 +39,12 @@ export class TaskDefinition {
     // is how runtime-synthesized tasks keep working in raw mode.
     raw_cost;
     raw_xp;
+    // Per-rep award schedule (Fork 1.13; only set by dataset loads). When
+    // present, rep k awards item_schedule[k] instead of `item`: a local
+    // ItemType, or a foreign award routed to the foreign-award callback
+    // (and NOT deposited locally). Length always equals max_reps (loader
+    // enforced). Undefined ⇒ vanilla behavior, `item` every rep.
+    item_schedule;
     constructor(overrides = {}) {
         Object.assign(this, overrides);
     }

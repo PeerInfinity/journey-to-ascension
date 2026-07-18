@@ -6,6 +6,11 @@ export class ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
     {
+        version: "Fork 1.13",
+        date: "2026-07-17",
+        changes: "- Per-rep award schedules: a dataset task may carry item_schedule (exactly max_reps entries) so each rep awards a scheduled item instead of the task's single item — a local consumable, or a foreign award {substrate, type, count} that is handed to the new window.setForeignAwardCallback hook (the cross-substrate grant bus in managed play) and deliberately awards nothing locally when no callback is registered. Artifacts cannot be scheduled; an applyTaskPatches item patch clears the schedule (whole-task reassignment wins). Without a schedule nothing changes — vanilla play is byte-identical. Also restores the SAVE_VERSION/changelog consistency the Fork 1.12 entry missed (the changelog screen no longer shows the version-mismatch error)"
+    },
+    {
         version: "Fork 1.12",
         date: "2026-07-17",
         changes: "- New substrate hook window.grantItem(item, count): grants a consumable item from outside a task completion — the arrival path for cross-substrate item grants. Accepts an item enum or display name (like grantPerk); counts accumulate; artifacts are rejected (behavior-slotted, not portable). Deposits through the game's own addItem, so the energy-reset keep formula applies to granted items unchanged. Inert in standalone play — nothing calls it"

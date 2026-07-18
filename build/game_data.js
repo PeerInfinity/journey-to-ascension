@@ -332,6 +332,46 @@ export function validateGameDataset(dataset) {
                 err(`${where}.item must be null or a live item index`);
             if (t?.use_item != null && !validItem(t.use_item))
                 err(`${where}.use_item must be null or a live item index`);
+            if (t?.item_schedule != null) {
+                // Fork 1.13 per-rep award schedule: only on item-awarding
+                // tasks, exactly max_reps entries. Local entries must be live
+                // NON-ARTIFACT items (behavior-slotted entries are not
+                // schedulable); foreign entries are shape-checked only — the
+                // receiving substrate's catalog is validated by the grant bus.
+                if (t?.item == null)
+                    err(`${where}.item_schedule requires a non-null item`);
+                if (!Array.isArray(t.item_schedule)) {
+                    err(`${where}.item_schedule must be an array`);
+                }
+                else {
+                    if (t.item_schedule.length !== t?.max_reps) {
+                        err(`${where}.item_schedule must have exactly max_reps (${t?.max_reps}) entries`);
+                    }
+                    t.item_schedule.forEach((entry, ei) => {
+                        if (typeof entry === "number") {
+                            if (!validItem(entry))
+                                err(`${where}.item_schedule[${ei}] must be a live item index`);
+                            else if (items[entry]?.behavior != null) {
+                                err(`${where}.item_schedule[${ei}] must not be a behavior-slotted (artifact) item`);
+                            }
+                        }
+                        else if (entry !== null && typeof entry === "object") {
+                            if (typeof entry.substrate !== "string" || entry.substrate.length === 0) {
+                                err(`${where}.item_schedule[${ei}].substrate must be a non-empty string`);
+                            }
+                            if (typeof entry.type !== "string" || entry.type.length === 0) {
+                                err(`${where}.item_schedule[${ei}].type must be a non-empty string`);
+                            }
+                            if (entry.count != null && !(Number.isInteger(entry.count) && entry.count > 0)) {
+                                err(`${where}.item_schedule[${ei}].count must be a positive integer`);
+                            }
+                        }
+                        else {
+                            err(`${where}.item_schedule[${ei}] must be an item index or a foreign-award object`);
+                        }
+                    });
+                }
+            }
             if (t?.prestige_layer != null
                 && !(Number.isInteger(t.prestige_layer) && t.prestige_layer >= 0 && t.prestige_layer < PrestigeLayer.Count)) {
                 err(`${where}.prestige_layer must be null or a layer index`);
@@ -634,6 +674,9 @@ function swapZoneTables(ds) {
             zone_id: zi,
             raw_cost: t.raw_cost,
             raw_xp: t.raw_xp,
+            item_schedule: t.item_schedule?.map((entry) => typeof entry === "number"
+                ? entry
+                : { substrate: entry.substrate, type: entry.type, count: entry.count ?? 1 }),
         }));
         ZONES.push({ name: zone.name, tasks, raw_drain: zone.raw_drain });
     });

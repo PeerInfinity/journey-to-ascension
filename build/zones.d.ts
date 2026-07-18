@@ -9,6 +9,12 @@ export declare enum TaskType {
     Prestige = 3,
     Boss = 4
 }
+export type ForeignAward = {
+    substrate: string;
+    type: string;
+    count: number;
+};
+export type ItemScheduleEntry = ItemType | ForeignAward;
 export declare class TaskDefinition {
     id: number;
     name: string;
@@ -27,6 +33,7 @@ export declare class TaskDefinition {
     free: boolean;
     raw_cost?: number | undefined;
     raw_xp?: number | undefined;
+    item_schedule?: ItemScheduleEntry[] | undefined;
     constructor(overrides?: Partial<TaskDefinition>);
 }
 export declare class Task {

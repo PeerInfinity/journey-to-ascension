@@ -11,6 +11,13 @@ export enum TaskType {
     Boss,
 }
 
+// A scheduled award that belongs to another substrate: the engine does not
+// deposit anything locally — the rep's award is handed to the foreign-award
+// callback (the cross-substrate grant bus in managed play; a no-op when no
+// callback is registered, e.g. standalone or headless).
+export type ForeignAward = { substrate: string, type: string, count: number };
+export type ItemScheduleEntry = ItemType | ForeignAward;
+
 export class TaskDefinition {
     id = 0;
     name = "";
@@ -40,6 +47,12 @@ export class TaskDefinition {
     // is how runtime-synthesized tasks keep working in raw mode.
     raw_cost?: number | undefined;
     raw_xp?: number | undefined;
+    // Per-rep award schedule (Fork 1.13; only set by dataset loads). When
+    // present, rep k awards item_schedule[k] instead of `item`: a local
+    // ItemType, or a foreign award routed to the foreign-award callback
+    // (and NOT deposited locally). Length always equals max_reps (loader
+    // enforced). Undefined ⇒ vanilla behavior, `item` every rep.
+    item_schedule?: ItemScheduleEntry[] | undefined;
 
     constructor(overrides: Partial<TaskDefinition> = {}) {
         Object.assign(this, overrides);

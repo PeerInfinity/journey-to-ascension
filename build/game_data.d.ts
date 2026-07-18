@@ -42,6 +42,11 @@ interface DsTask {
     prestige_layer?: number | null;
     raw_cost?: number;
     raw_xp?: number;
+    item_schedule?: Array<number | {
+        substrate?: string;
+        type?: string;
+        count?: number;
+    }>;
 }
 interface DsZone {
     name?: string;
