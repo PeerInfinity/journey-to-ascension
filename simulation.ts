@@ -2492,11 +2492,13 @@ function recordPerformedTaskRep(task: Task) {
 
 // Record an item use (positive amounts only — negatives are undos). Covers
 // artifact uses too, whether from a direct click, auto-use, or the internal use
-// a scheduled artifact task performs.
+// a scheduled artifact task performs. Item entries carry the zone the use
+// happened in (like task entries) so a per-visit slicer can attribute a use to
+// the region visit it belongs to without positional inference.
 function recordPerformedItem(item: ItemType, count: number) {
     if (count <= 0) return;
     const name = (ITEMS[item] as ItemDefinition | undefined)?.name ?? String(item);
-    _current_run_actions.push({ type: "item", name, item, count });
+    _current_run_actions.push({ type: "item", name, item, count, zone_id: GAMESTATE.current_zone });
 }
 
 // End of a run (energy reset or prestige, both via doAnyReset): the actions
