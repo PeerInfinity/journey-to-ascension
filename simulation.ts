@@ -661,38 +661,71 @@ function progressTask(task: Task, progress: number, consume_energy = true) {
     updateEnabledTasks();
 }
 
-function completeTaskInstantly(task: Task) {
+function completeTaskInstantly(task: Task): boolean {
     // Calculate remaining reps and complete them all at once, billing
     // the same energy + XP a normal tick-by-tick execution would.
     // Ported from iframe_games/journey-to-ascension-modified (2026-01-20),
     // with fullyFinishTask → onFullyFinishTask rename (upstream refactor
     // 2025-09-22 → 2026-04-12).
+    //
+    // AFFORDABILITY (2026-07-26). This used to complete and bill every
+    // remaining rep unconditionally. It billed honestly, but it never asked
+    // whether the run could PAY: modifyEnergy() has no floor, and
+    // checkEnergyReset() runs only after updateActiveTask() returns. Paced
+    // play checks between ticks, so a run that cannot afford a task dies
+    // partway through it and banks nothing; instant mode finished the task —
+    // including applyFinishTaskRepEffects and onFullyFinishTask, i.e. its
+    // rewards and unlocks — and only then noticed energy had gone negative.
+    // That made Instant a GAMEPLAY difference rather than a speed one, which
+    // is precisely what a fast-forward must never be.
+    //
+    // Returns whether the task fully finished, so the caller can leave an
+    // unaffordable task active exactly as the paced path does.
     const remaining_reps = task.task_definition.max_reps - task.reps;
     if (remaining_reps <= 0) {
-        return;
+        return true;
     }
 
-    const cost = calcTaskCost(task);
-    const progress_per_tick = calcTaskProgressMultiplier(task);
-
-    for (let rep = 0; rep < remaining_reps; rep++) {
-        const is_single_tick = isSingleTickTaskImpl(progress_per_tick, cost);
-        const ticks_for_rep = calcTaskTicks(progress_per_tick, cost - task.progress);
-        const energy_per_tick = calcEnergyDrainPerTick(task, is_single_tick);
-        const energy_for_rep = ticks_for_rep * energy_per_tick;
-        modifyEnergy(-energy_for_rep);
-
-        const xp_progress = cost - task.progress;
-        for (const skill of task.task_definition.skills) {
-            addSkillXp(skill, calcSkillXp(task, xp_progress));
+    // Drive the REAL per-tick path rather than a closed-form cost model. The
+    // old model sampled calcTaskProgressMultiplier once and multiplied, but
+    // progress-per-tick RISES during a task as its skills level up, so it
+    // consistently overestimated the ticks a rep needs — and billed that
+    // inflated tick count as energy. Measured on the starting task: paced play
+    // finished the rep in 36 ticks for 36 energy, the model predicted 40.
+    //
+    // Ticking here is not a contradiction of "instant": what instant removes is
+    // the WAIT (one tick per animation frame), not the arithmetic. Looping the
+    // same function paced play calls makes the outcome — energy, XP, skill
+    // levels, unlocks — identical BY CONSTRUCTION instead of by a second model
+    // that has to be kept in agreement with the first.
+    while (task.reps < task.task_definition.max_reps) {
+        // Paced play checks energy between ticks (checkEnergyReset runs after
+        // updateActiveTask), so a run that has already emptied its pool gets no
+        // further ticks. Stopping here leaves the rep unfinished and its finish
+        // effects unbanked — exactly where paced play would have died.
+        if (GAMESTATE.current_energy <= 0) {
+            return false;
         }
 
-        task.progress = 0;
-        applyFinishTaskRepEffects(task);
+        const reps_before = task.reps;
+        progressTask(task, calcTaskProgressPerTick(task));
+
+        // Between reps paced play re-applies the rep-start effects (see
+        // updateActiveTask). Skipped after the LAST rep, where progressTask has
+        // already run onFullyFinishTask.
+        if (task.reps > reps_before && task.reps < task.task_definition.max_reps) {
+            applyTaskRepStartEffects(task);
+        }
     }
 
-    onFullyFinishTask(task);
-    updateEnabledTasks();
+    // Deliberately NOT honouring GAMESTATE.repeat_tasks: completing every
+    // remaining rep in one go is what instant mode IS, and was its behaviour
+    // before this rewrite. That is the one intended divergence from paced play;
+    // everything else above now goes through the identical code path.
+    //
+    // progressTask already fired onFullyFinishTask + updateEnabledTasks on the
+    // rep that completed the task, so there is nothing left to do here.
+    return true;
 }
 
 function updateActiveTask() {
@@ -715,8 +748,12 @@ function updateActiveTask() {
     // programmatic hook (window.setInstantMode, used by the substrate and
     // tests) OR the player-facing mod pair (toggle gated behind Settings).
     if (instant_mode || (GAMESTATE.mods.instant_mode_allowed && GAMESTATE.mods.instant_mode)) {
-        completeTaskInstantly(active_task);
-        GAMESTATE.active_task = null;
+        // Only clear the active task when it actually finished. A task the run
+        // could not afford stays active, exactly as it would under paced play,
+        // where progressTask leaves an unfinished rep in place.
+        if (completeTaskInstantly(active_task)) {
+            GAMESTATE.active_task = null;
+        }
         saveGame();
         return;
     }
