@@ -165,6 +165,7 @@ export declare function defaultAutoFillOrder(): AutoFillCategory[];
 export declare function getAutoFillOrder(): AutoFillCategory[];
 export declare function moveAutoFillCategory(category: AutoFillCategory, delta: number): void;
 export declare function resetAutoFillOrder(): void;
+export declare function insertMissingPriorities(zone_id: number): number;
 export declare function autoFillPriorities(zone_id: number): void;
 export declare function autoFillAllPriorities(): void;
 export declare function setAutomationMode(mode: AutomationMode): void;

@@ -3120,26 +3120,13 @@ function autoFillCategory(def: TaskDefinition): AutoFillCategory {
     return "plain";
 }
 
-export function autoFillPriorities(zone_id: number) {
+// The zone's visible tasks in auto-fill order (category band, then the band's
+// metric, then id). Hidden tasks not yet unlocked are left out.
+function autoFillOrderedIds(zone_id: number): number[] {
     const zone = ZONES[zone_id];
     if (!zone) {
-        return;
+        return [];
     }
-
-    // Preserve player-prioritized entries the rebuild can't know about:
-    // ids that aren't in the zone definition (host-injected exit-choice
-    // tasks, scheduled artifact tasks). Matched by "not a zone task"
-    // rather than by live-task lookup, because the regen can fire while
-    // the injected task doesn't currently exist (e.g. the zone-entry
-    // hook on a fresh re-entry, before the host re-injects exit tasks) —
-    // the automation queue skips ids with no live task, so a parked
-    // entry is harmless until its task reappears.
-    const zone_task_ids = new Set(zone.tasks.map((def) => def.id));
-    const old_prios = GAMESTATE.automation_prios.get(zone_id) ?? [];
-    const preserved = old_prios
-        .map((id, index) => ({ id, index }))
-        .filter(({ id }) => !zone_task_ids.has(id));
-
     const order = getAutoFillOrder();
     const entries: { id: number; group: number; metric: number }[] = [];
     for (const def of zone.tasks) {
@@ -3170,7 +3157,62 @@ export function autoFillPriorities(zone_id: number) {
     }
 
     entries.sort((a, b) => a.group - b.group || a.metric - b.metric || a.id - b.id);
-    const ids = entries.map((e) => e.id);
+    return entries.map((e) => e.id);
+}
+
+// Slot the zone's visible tasks that are missing from its priority list into
+// it, leaving every entry already there where it is: each missing task goes
+// just before the first listed task that auto-fill would put after it (so a
+// task unlocked mid-game lands ahead of Travel). Returns how many were added.
+// For a host that drives a zone whose list the player may have ordered by
+// hand; Auto-Prioritize does the same job by regenerating the whole list.
+export function insertMissingPriorities(zone_id: number): number {
+    const fresh = autoFillOrderedIds(zone_id);
+    const list = [...(GAMESTATE.automation_prios.get(zone_id) ?? [])];
+    let added = 0;
+    for (let i = 0; i < fresh.length; i++) {
+        const id = fresh[i] as number;
+        if (list.includes(id)) {
+            continue;
+        }
+        let at = list.length;
+        for (let j = i + 1; j < fresh.length; j++) {
+            const k = list.indexOf(fresh[j] as number);
+            if (k >= 0) {
+                at = k;
+                break;
+            }
+        }
+        list.splice(at, 0, id);
+        added++;
+    }
+    if (added > 0) {
+        GAMESTATE.automation_prios.set(zone_id, list);
+    }
+    return added;
+}
+
+export function autoFillPriorities(zone_id: number) {
+    const zone = ZONES[zone_id];
+    if (!zone) {
+        return;
+    }
+
+    // Preserve player-prioritized entries the rebuild can't know about:
+    // ids that aren't in the zone definition (host-injected exit-choice
+    // tasks, scheduled artifact tasks). Matched by "not a zone task"
+    // rather than by live-task lookup, because the regen can fire while
+    // the injected task doesn't currently exist (e.g. the zone-entry
+    // hook on a fresh re-entry, before the host re-injects exit tasks) —
+    // the automation queue skips ids with no live task, so a parked
+    // entry is harmless until its task reappears.
+    const zone_task_ids = new Set(zone.tasks.map((def) => def.id));
+    const old_prios = GAMESTATE.automation_prios.get(zone_id) ?? [];
+    const preserved = old_prios
+        .map((id, index) => ({ id, index }))
+        .filter(({ id }) => !zone_task_ids.has(id));
+
+    const ids = autoFillOrderedIds(zone_id);
     // Re-insert preserved foreign entries at (approximately) their old
     // positions, in ascending order so earlier inserts keep later
     // indices meaningful.
@@ -4681,16 +4723,33 @@ export function updateGamestate() {
     setAutomationMode(mode);
     return GAMESTATE.automation_mode;
 };
-// Fill the zone's automation priorities only when the player has none
-// configured there (their own priorities/thresholds stay untouched).
+// Fill the zone's automation priorities when the player has none configured
+// there; otherwise only slot in visible tasks the list is missing (a task
+// unlocked since the list was made), keeping the player's order. Without
+// Auto-Prioritize nothing else adds an unlocked task, and the automation
+// never runs a task its list lacks.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).ensureZoneAutomationPriorities = (zone?: number) => {
     const z = typeof zone === "number" ? zone : GAMESTATE.current_zone;
     if (!GAMESTATE.automation_prios.get(z)?.length) {
         autoFillPriorities(z);
+    } else {
+        insertMissingPriorities(z);
     }
     return GAMESTATE.automation_prios.get(z) ?? [];
 };
+// Skip on Block (true) or Pause on Block (false) — the automation panel's
+// toggle. A host driving the automation sets Skip for its drive: under Pause,
+// one blocked task (a Boss too strong for the energy, an item not held) stops
+// the automation, and an idle zone spends no energy. Returns the previous value.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).setAutomationSkipBlocked = (on: boolean) => {
+    const previous = GAMESTATE.automation_skip_blocked;
+    GAMESTATE.automation_skip_blocked = !!on;
+    return previous;
+};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).getAutomationSkipBlocked = () => GAMESTATE.automation_skip_blocked;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).getPrestigeBuyQueue = () => GAMESTATE.prestige_buy_queue;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
